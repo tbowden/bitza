@@ -26,3 +26,23 @@
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+
+
+# My changes 
+#(prolly no longer needed if I'm going to use uv to manage python env?)
+venv/
+
+
+# merge in default uv generated contents
+
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
