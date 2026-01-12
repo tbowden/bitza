@@ -31,7 +31,7 @@ yarn-error.log*
 # My changes 
 #(prolly no longer needed if I'm going to use uv to manage python env?)
 venv/
-
+*.log
 
 # merge in default uv generated contents
 
@@ -43,6 +43,9 @@ dist/
 wheels/
 *.egg-info
 
+# temporary stuff. Regularly clear these settings out
+old_logging.py
+logtest.py
 # Virtual environments
 .venv
 
