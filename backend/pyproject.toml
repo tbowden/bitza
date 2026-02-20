@@ -5,8 +5,10 @@ description = "Backend for storing bitza this and bitza that (electronics compon
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-    "alembic>=1.17.2",
+    "alembic[tz]>=1.17.2",
+    "argon2-cffi>=25.1.0",
     "fastapi[all]>=0.128.0",
+    "python-jose[cryptography]>=3.5.0",
     "sqlalchemy>=2.0.45",
     "uvicorn>=0.40.0",
 ]

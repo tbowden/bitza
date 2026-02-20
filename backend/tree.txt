@@ -1,0 +1,45 @@
+.
+├── app
+│   ├── alembic.ini
+│   ├── api
+│   │   └── v0_1
+│   │       ├── auth.py
+│   │       └── users.py
+│   ├── core
+│   │   ├── config.py
+│   │   ├── dependencies.py
+│   │   ├── logger.py
+│   │   └── security.py
+│   ├── data
+│   │   └── bitza_1.db
+│   ├── db
+│   │   ├── base.py
+│   │   ├── migrations
+│   │   │   ├── env.py
+│   │   │   ├── README
+│   │   │   ├── script.py.mako
+│   │   │   └── versions
+│   │   │       ├── 2026_01_28_1719-0b8838420a55_initial_schema.py
+│   │   │       ├── 2026_02_04_0310-0f3267219977_updated_user.py
+│   │   │       └── 2026_02_04_0347-81487167e00c_seed_users.py
+│   │   └── session.py
+│   ├── main.py
+│   ├── models
+│   │   ├── __init__.py
+│   │   └── user.py
+│   ├── schemas
+│   │   ├── auth.py
+│   │   └── user.py
+│   └── services
+│       ├── auth_service.py
+│       └── user_service.py
+├── docker-compose.yaml
+├── Dockerfile
+├── pyproject.toml
+├── README.md
+├── tests
+│   └── api
+│       └── v0_1
+└── uv.lock
+
+27 directories, 66 files
