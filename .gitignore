@@ -32,6 +32,7 @@ yarn-error.log*
 #(prolly no longer needed if I'm going to use uv to manage python env?)
 venv/
 *.log
+data/*.db
 
 # merge in default uv generated contents
 

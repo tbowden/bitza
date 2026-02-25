@@ -10,15 +10,21 @@ class Settings(BaseSettings):
     """Application config settings"""
     APP_NAME: str = "Bitza_backend"
     APP_VERSION: str = "0.1.0"
-    DEBUG: bool = True
-    #DB_USER: str = ""
-    #DB_PASSWORD: str = ""
     DB_NAME: str = "bitza_1_dev.db"
     DB_PATH: str = "app/data"
     SECRET_KEY: str = "do not use this in prod. Ever."
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     REFRESH_TOKEN_EXPIRE_DAYS: int = 30
+
+    # Logging
+    LOG_LEVEL: str = "DEBUG"
+    LOG_FORMAT: str = "auto" # auto | console | json
+    LOG_FILE_NAME: str = "bitza_dev.log"
+    LOG_MAX_BYTES: int = 5_000_000
+    LOG_BACKUP_COUNT: int = 3
+    DEBUG: bool = True # set to false in ../../.env for prod
+
 
     @property
     def DATABASE_URL(self) -> str:
