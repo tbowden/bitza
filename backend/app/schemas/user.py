@@ -1,8 +1,4 @@
 """User Pydantic schemas"""
-# From initial "Complete File Contents", it is not complete and ignoring
-# because of the inconsistencies.
-# Going with next itteration of the schema...
-# Using from "Update Pydantic Schemas" (after "Install Password Hashing Library")
 
 from pydantic import BaseModel, EmailStr, Field, ConfigDict
 from datetime import datetime
@@ -23,13 +19,19 @@ class UserUpdate(UserBase):
     display_name: str | None = None
     email: EmailStr | None = None
 
-class UserResponse(UserBase):
-    """Superuser get individual user details"""
+class OldUserResponse(UserBase):
+    """User get individual user details"""
     id: int
     is_active: bool
     is_superuser: bool
     created_at: datetime | None = None
     updated_at: datetime | None = None
+
+    model_config = ConfigDict(from_attributes = True)
+
+class UserResponse(UserBase):
+    """User get individual user details"""
+    id: int
 
     model_config = ConfigDict(from_attributes = True)
 

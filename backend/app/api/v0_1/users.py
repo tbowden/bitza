@@ -28,8 +28,6 @@ def list_users(
         db: Session = Depends(get_db),
         ):
     """List users"""
-    # todo: if superuser, change active_only to False
-    # Not sure this is right - maybe should be a different
     # response_model for superuser?
     users, total = UserService.list_users(db, skip, limit, active_only)
     return {
