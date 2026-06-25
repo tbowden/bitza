@@ -9,21 +9,22 @@ etc. Auth and JWT sections apply only when authentication is required.
 
 ## 1. Core Technology Stack (MANDATORY)
 
-- Python 3.11+ managed by **uv** (see Section 11)
+- Python 3.11+ managed by **uv** (see Section 12)
 - FastAPI (latest stable)
-- SQLAlchemy 2.x — **synchronous only**
+- SQLAlchemy 2.x — **synchronous DB access only** (see Section 9 for when async is appropriate)
 - Pydantic v2
-- SQLite — no external database (with spaitalite extension when required for spatial data)
+- SQLite — no external database
 - Alembic for migrations
 - pytest for testing
 - JWT: `python-jose` + `bcrypt` (when auth is required)
-- `zxcvbn` for password checking (when auth is required)
+- `zxcvbn` for password strength checking (when auth is required)
+- `httpx` for external HTTP calls (async client only — see Section 9)
 
 **DO NOT:**
-- Use async DB access
+- Use async SQLAlchemy or async DB sessions
 - Use SQLModel
 - Use external services (Redis, queues, etc.)
-- Use `passlib` — use `bcrypt` directly instead (passlib breaks on bcrypt >= 4.1)
+- Use `passlib` — use `bcrypt` directly (passlib breaks on bcrypt >= 4.1)
 
 ---
 
@@ -56,6 +57,7 @@ DB (engine + session only)
 - DB interaction only: reads, writes, deletes
 - Use `flush()` not `commit()` — the service layer owns transaction boundaries
 - Return ORM model instances
+- Always synchronous
 
 **DB layer:**
 - Session and engine management only
@@ -96,7 +98,7 @@ app/
 
   core/
     config.py                # Pydantic BaseSettings
-    security.py              # bcrypt, JWT utils (if auth required)
+    security.py              # bcrypt, JWT utils, password validation (if auth required)
     exceptions.py            # Custom HTTPException subclasses
     dependencies.py          # All FastAPI DI providers
 
@@ -245,10 +247,15 @@ revoke old token → issue new pair (rotation)
 - Password strength must be evaluated using zxcvbn.
 - A password is only acceptable if it achieves a zxcvbn score of 3 or higher.
 - Passwords must have a minimum length of 12 and maximum length of 128 chars.
-- Password composition rules (uppercase, digits, symbols) must not be used as the primary strength mechanism.
-- Passwords must also be checked against known breached password datasets unless the app is expected to be run on a non public facing network.
-- Frontend and backend must use zxcvbn to ensure consistent strength evaluation.
-- Backend validation is authoritative; frontend validation is advisory only.
+- Password composition rules (uppercase, digits, symbols) must not be used as
+  the primary strength mechanism — zxcvbn is the gate.
+- Passwords must also be checked against known breached password datasets unless
+  the app is expected to run on a non-public-facing network. Implement via the
+  HIBP k-anonymity API using an async `httpx.AsyncClient` call (see Section 9).
+  Gate the check behind a `CHECK_PWNED_PASSWORDS: bool = False` setting so it
+  can be enabled for public deployments without code changes.
+- The breach check must fail open on network errors — a transient HIBP outage
+  must never prevent a legitimate password change.
 
 ### Security rules
 
@@ -267,6 +274,7 @@ revoke old token → issue new pair (rotation)
 - Use `flush()` — never `commit()`
 - No business logic, no permission checks
 - No raw SQL strings outside repository methods (use SQLAlchemy constructs)
+- Always synchronous — repositories never use async/await
 
 ---
 
@@ -279,10 +287,98 @@ revoke old token → issue new pair (rotation)
 - Use private `_can_*` methods to encapsulate permission logic
 - Raise custom `HTTPException` subclasses (from `app/core/exceptions.py`)
 - Write audit log entries for significant mutations if an audit log is in scope
+- Methods that perform external I/O (HTTP calls, file writes) must be `async def`
+  (see Section 9); all other service methods remain synchronous
 
 ---
 
-## 9. API Layer Rules
+## 9. Sync vs Async
+
+### The core rule
+
+**SQLAlchemy is always synchronous.** The DB engine, session, and all repository
+methods are sync. This is a hard requirement — do not use async SQLAlchemy.
+
+**FastAPI supports both sync and async route handlers and service methods.**
+The framework runs sync handlers in a thread pool and async handlers on the
+event loop. Both work correctly alongside a sync DB session.
+
+### When to use async
+
+Use `async def` only when the operation involves non-DB I/O that would otherwise
+block the event loop:
+
+- External HTTP calls (e.g. HIBP breach check, third-party APIs)
+- File I/O in hot paths (prefer `aiofiles` for large uploads)
+- Any `await`-able operation
+
+Do **not** use async for:
+- Repository methods (always sync)
+- Service methods that only call repositories (always sync)
+- Route handlers that only call sync services (keep them sync)
+
+### The narrow async boundary pattern
+
+Keep the async surface as small and explicit as possible. A common pattern
+is one async helper in `security.py` or `core/`, called by a small number
+of async service methods, with the rest of the stack remaining sync:
+
+```python
+# core/security.py — async only because of the HTTP call
+async def check_pwned_password(password: str) -> None:
+    if not settings.CHECK_PWNED_PASSWORDS:
+        return
+    async with httpx.AsyncClient(timeout=5.0) as client:
+        resp = await client.get(f"https://api.pwnedpasswords.com/range/{prefix}")
+        ...
+
+# services/user_service.py — async only because it calls the above
+async def create_user(self, data: UserCreate, ...) -> User:
+    await validate_password(data.password)   # async boundary
+    user = self._user_repo.create(...)       # sync DB access, no await
+    self._db.commit()                        # sync
+    return user
+
+# api/v1/endpoints/users.py — async because it calls an async service method
+async def create_user(body: UserCreate, ...) -> User:
+    return await user_service.create_user(data=body, ...)
+```
+
+### Async in the CLI
+
+The CLI (Typer) is synchronous. Call async service methods from the CLI using
+`asyncio.run()`, which creates and manages a fresh event loop:
+
+```python
+import asyncio
+
+def create_superuser_command(...) -> None:
+    async def _run():
+        user = await service.create_superuser(...)
+
+    asyncio.run(_run())
+```
+
+Never call `asyncio.run()` inside a route handler or any other async context —
+it will raise a `RuntimeError` because an event loop is already running.
+FastAPI handles the event loop for route handlers automatically.
+
+### External HTTP calls
+
+Always use `httpx.AsyncClient` for external HTTP calls, never `requests` or
+`httpx` synchronous client:
+
+```python
+async with httpx.AsyncClient(timeout=5.0) as client:
+    response = await client.get(url)
+```
+
+Set an explicit timeout. Always handle network errors gracefully — external
+services are unreliable and must not break core application functionality.
+
+---
+
+## 10. API Layer Rules
 
 - No business logic — call service, return result
 - Use `response_model` on every endpoint
@@ -293,10 +389,13 @@ revoke old token → issue new pair (rotation)
   - `204` for delete / logout (no body)
   - `404` for not-found (including privacy-masked resources)
   - `409` for uniqueness conflicts or blocked deletes
+- Route handlers are `async def` only when they call an async service method;
+  otherwise keep them `def` (sync handlers run in FastAPI's thread pool, which
+  is appropriate when the underlying work is synchronous DB access)
 
 ---
 
-## 10. Dependency Injection
+## 11. Dependency Injection
 
 Provide a provider function for every repository and service:
 
@@ -316,7 +415,7 @@ Include a `get_current_user` provider that:
 
 ---
 
-## 11. Environment & uv Configuration (MANDATORY)
+## 12. Environment & uv Configuration (MANDATORY)
 
 ### Python version management
 
@@ -381,7 +480,7 @@ Use `@lru_cache()` on the `get_settings()` factory.
 
 ---
 
-## 12. Migrations (Alembic)
+## 13. Migrations (Alembic)
 
 - Use Alembic for all schema changes — never `Base.metadata.create_all()` in runtime code
 - Set `render_as_batch=True` in `alembic/env.py` — required for SQLite `ALTER TABLE`
@@ -391,14 +490,14 @@ Use `@lru_cache()` on the `get_settings()` factory.
   solely on autogenerate for the first schema
 
 ```bash
-alembic revision --autogenerate -m "describe change"
-alembic upgrade head
-alembic downgrade -1
+uv run alembic revision --autogenerate -m "describe change"
+uv run alembic upgrade head
+uv run alembic downgrade -1
 ```
 
 ---
 
-## 13. Transaction Management
+## 14. Transaction Management
 
 - Service layer owns all `commit()` calls
 - Repositories call `flush()` + `refresh()` only
@@ -408,7 +507,7 @@ alembic downgrade -1
 
 ---
 
-## 14. Testing
+## 15. Testing
 
 Use pytest with the following conventions:
 
@@ -427,7 +526,7 @@ APP_ENV=test uv run pytest --cov=app --cov-report=term-missing
 
 ---
 
-## 15. File Uploads (when required)
+## 16. File Uploads (when required)
 
 - Store files on the server filesystem; record relative paths in the DB
 - Define `UPLOAD_DIR` in settings (e.g. `./data/uploads`)
@@ -438,7 +537,7 @@ APP_ENV=test uv run pytest --cov=app --cov-report=term-missing
 
 ---
 
-## 16. Error Handling
+## 17. Error Handling
 
 - All exceptions must return consistent JSON: `{"detail": "..."}`
 - Define custom `HTTPException` subclasses in `app/core/exceptions.py`
@@ -457,7 +556,7 @@ APP_ENV=test uv run pytest --cov=app --cov-report=term-missing
 
 ---
 
-## 17. Docker & Deployment
+## 18. Docker & Deployment
 
 ### Dockerfile
 
@@ -493,7 +592,7 @@ def health_check():
 
 ---
 
-## 18. Code Quality Rules
+## 19. Code Quality Rules
 
 - Full type hints on all function signatures and class attributes
 - No duplicated logic across layers
@@ -509,14 +608,24 @@ def health_check():
 
 ---
 
-## 19. Anti-Patterns (STRICTLY FORBIDDEN)
+## 20. Anti-Patterns (STRICTLY FORBIDDEN)
 
 **Architecture:**
-- Async DB access
+- Async DB access or async SQLAlchemy
 - ORM queries in services or routes
 - Business logic in repositories or routes
 - Combining ORM models and Pydantic schemas
 - Importing models directly in routes
+
+**Async:**
+- Blocking the event loop with sync HTTP calls in async contexts — use
+  `httpx.AsyncClient` instead of `requests` or the sync `httpx` client
+- Making route handlers or service methods `async def` solely because it
+  "seems better" — async is only justified when there is actual non-DB I/O
+- Calling `asyncio.run()` inside a route handler or any running async context
+  (raises `RuntimeError` — use it only in CLI/sync entry points)
+- Forgetting to make a route handler `async def` when it calls an async
+  service method (causes `RuntimeError: coroutine was never awaited`)
 
 **Auth (when applicable):**
 - Storing access tokens in DB
