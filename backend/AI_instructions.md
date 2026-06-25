@@ -17,12 +17,13 @@ etc. Auth and JWT sections apply only when authentication is required.
 - Alembic for migrations
 - pytest for testing
 - JWT: `python-jose` + `bcrypt` (when auth is required)
+- `zxcvbn` for password checking (when auth is required)
 
 **DO NOT:**
 - Use async DB access
 - Use SQLModel
 - Use external services (Redis, queues, etc.)
-- Use `passlib` — use `bcrypt` directly (passlib breaks on bcrypt >= 4.1)
+- Use `passlib` — use `bcrypt` directly instead (passlib breaks on bcrypt >= 4.1)
 
 ---
 
@@ -238,6 +239,16 @@ revoke old token → issue new pair (rotation)
 **Logout:** revoke refresh token in DB (idempotent)
 
 **Authenticated request:** validate access token signature + type — no DB lookup
+
+### Password policy
+
+- Password strength must be evaluated using zxcvbn.
+- A password is only acceptable if it achieves a zxcvbn score of 3 or higher.
+- Passwords must have a minimum length of 12 and maximum length of 128 chars.
+- Password composition rules (uppercase, digits, symbols) must not be used as the primary strength mechanism.
+- Passwords must also be checked against known breached password datasets unless the app is expected to be run on a non public facing network.
+- Frontend and backend must use zxcvbn to ensure consistent strength evaluation.
+- Backend validation is authoritative; frontend validation is advisory only.
 
 ### Security rules
 
