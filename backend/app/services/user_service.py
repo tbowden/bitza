@@ -7,7 +7,7 @@ from fastapi import HTTPException, status
 
 from app.core.security import hash_password
 from app.models.user import User
-from app.schemas.user import UserCreate, UserUpdate
+from app.schemas.user import AdminUserCreate, AdminUserUpdate
 
 
 class UserService:
@@ -80,7 +80,7 @@ class UserService:
     # ---------- CREATE ----------
 
     @staticmethod
-    def create_user(db: Session, user_in: UserCreate) -> User:
+    def admin_create_user(db: Session, user_in: AdminUserCreate) -> User:
         """
         Create new user.
         
@@ -104,16 +104,18 @@ class UserService:
         hashed_password = hash_password(user_in.password)
 
         # Create user
-        db_user = User(
+        new_user = User(
             display_name=user_in.display_name,
             email=user_in.email,
             hashed_password=hashed_password,
+            is_active=True,
+            is_superuser=False,
         )
 
         try:
-            db.add(db_user)
+            db.add(new_user)
             db.commit()
-            db.refresh(db_user)
+            db.refresh(new_user)
         except IntegrityError:
             db.rollback()
             raise HTTPException(
@@ -121,12 +123,12 @@ class UserService:
                 detail="User creation failed due to database constraint",
             )
 
-        return db_user
+        return new_user
 
     # ---------- UPDATE ----------
 
     @staticmethod
-    def update_user(db: Session, user_id: int, user_in: UserUpdate) -> User:
+    def admin_pdate_user(db: Session, user_id: int, user_in: AdminUserUpdate) -> User:
         """
         Update user.
         
