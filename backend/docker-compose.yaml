@@ -1,0 +1,63 @@
+version: "3.9"
+
+# ---------------------------------------------------------------------------
+# Asset Management API
+#
+# Designed to sit behind your existing nginx reverse proxy.
+# The app container is NOT exposed on a public port — nginx forwards to it
+# via the shared `proxy_network`.
+#
+# Usage:
+#   docker compose up -d
+#
+# To connect from your nginx reverse proxy container, proxy_pass to:
+#   http://assetmgmt_app:8000
+# ---------------------------------------------------------------------------
+
+services:
+  app:
+    container_name: assetmgmt_app
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+
+    environment:
+      # APP_ENV selects the .env.<env> file inside the container.
+      # Override here or in a .env file at the compose project root.
+      APP_ENV: ${APP_ENV:-prod}
+
+    volumes:
+      # Persist the SQLite database across container rebuilds.
+      - assetmgmt_data:/app/data
+      # Mount the prod env file at runtime — do NOT bake secrets into the image.
+      - ./.env.prod:/app/.env.prod:ro
+
+    networks:
+      - proxy_network
+
+    healthcheck:
+      test: ["CMD", "python", "-c",
+             "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
+    # Resource limits — appropriate for a small-scale deployment.
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+
+volumes:
+  assetmgmt_data:
+    driver: local
+
+networks:
+  # Must match the network name your existing nginx reverse proxy is attached to.
+  # Change this name to match your environment.
+  proxy_network:
+    external: true
+    name: nginx_proxy_network
