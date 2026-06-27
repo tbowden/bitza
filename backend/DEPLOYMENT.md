@@ -1,4 +1,4 @@
-# Deployment Guide
+# Deployment guide
 
 Step-by-step instructions for three scenarios:
 
@@ -31,13 +31,13 @@ Docker scenarios additionally require:
 
 ---
 
-## Local Development
+## Local development
 
 ### 1. Clone the repository
 
 ```bash
 git clone <repository-url>
-cd assetmgmt
+cd bitza
 ```
 
 ### 2. Install dependencies
@@ -108,7 +108,7 @@ reverse proxy in front of it.
 
 ```bash
 git clone <repository-url>
-cd assetmgmt
+cd bitza
 ```
 
 ### 2. Configure the UAT environment
@@ -128,10 +128,10 @@ Paste the output as the value of `SECRET_KEY` in `.env.uat`.
 
 ### 3. Add a host port to docker-compose for UAT
 
-The default `docker-compose.yml` does not expose a host port (it expects nginx
+The default `docker-compose.yaml` does not expose a host port (it expects nginx
 to proxy traffic). For UAT without nginx, add a temporary port mapping.
 
-Open `docker-compose.yml` and add a `ports` section under the `app` service:
+Open `docker-compose.yaml` and add a `ports` section under the `app` service:
 
 ```yaml
 services:
@@ -189,7 +189,7 @@ docker compose up -d --build # rebuild image and restart
 
 ---
 
-## Docker — Production
+## Docker — production
 
 Runs the application in a Docker container behind your existing nginx reverse
 proxy. The container is not exposed directly on a public port.
@@ -198,7 +198,7 @@ proxy. The container is not exposed directly on a public port.
 
 ```bash
 git clone <repository-url>
-cd assetmgmt
+cd bitza
 ```
 
 ### 2. Create the production environment file
@@ -228,7 +228,7 @@ Key settings to review in `.env.prod`:
 
 ### 3. Configure the Docker network name
 
-Open `docker-compose.yml` and check the network name at the bottom of the file:
+Open `docker-compose.yaml` and check the network name at the bottom of the file:
 
 ```yaml
 networks:
@@ -248,12 +248,12 @@ Update the `name:` value to match.
 ### 4. Configure nginx
 
 Add a location block to your nginx configuration to proxy traffic to the
-container. The container is reachable by its name `assetmgmt_app` on the
+container. The container is reachable by its name `bitza_app` on the
 shared Docker network:
 
 ```nginx
 location /api/ {
-    proxy_pass         http://assetmgmt_app:8000;
+    proxy_pass         http://bitza_app:8000;
     proxy_set_header   Host              $host;
     proxy_set_header   X-Real-IP         $remote_addr;
     proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
@@ -326,12 +326,12 @@ docker compose run --rm app alembic current
 
 ## Database backup
 
-The SQLite database lives in the `assetmgmt_data` Docker volume. Back it up by
+The SQLite database lives in the `bitza_data` Docker volume. Back it up by
 copying the file out of the volume:
 
 ```bash
 # Find the volume mount path
-docker volume inspect assetmgmt_data
+docker volume inspect bitza_data
 
 # Or copy directly via the container
 docker compose exec app cat /app/data/prod.db > backup-$(date +%Y%m%d).db

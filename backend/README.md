@@ -1,6 +1,12 @@
-# Asset Management API
+# Bitza asset management API
 
-FastAPI CRUD API — Phase 1: User Management & Authentication
+A REST API for tracking the location, quantity, and details of physical assets —
+electronic components, tools, and other items stored across named locations.
+
+> **Getting started?** See [DEPLOYMENT.md](DEPLOYMENT.md) for step-by-step
+> setup instructions covering local development, Docker UAT, and production.
+
+---
 
 ## Stack
 
@@ -9,14 +15,14 @@ FastAPI CRUD API — Phase 1: User Management & Authentication
 | Framework | FastAPI |
 | ORM | SQLAlchemy 2.x (sync) |
 | Database | SQLite (WAL mode, FK enforcement) |
-| Auth | JWT (python-jose) + bcrypt |
+| Auth | JWT (python-jose) + bcrypt + zxcvbn |
 | Migrations | Alembic |
 | Tests | pytest + httpx TestClient |
-| Runtime | Python 3.11+ |
+| Runtime | Python 3.12+ managed by uv |
 
 ---
 
-## Project Structure
+## Project structure
 
 ```
 app/
@@ -27,163 +33,54 @@ app/
     endpoints/
       auth.py                   # POST /auth/{login,refresh,logout}
       users.py                  # CRUD /users/
+      locations.py              # CRUD /locations/ + nested details
+      assets.py                 # CRUD /assets/, transactions, audit, categories
   services/
-    auth_service.py             # All JWT + auth logic
-    user_service.py             # All RBAC + user business logic
+    auth_service.py
+    user_service.py
+    location_service.py
+    asset_service.py
   repositories/
-    user_repository.py          # DB reads/writes for users
-    token_repository.py         # Refresh token whitelist
+    user_repository.py
+    token_repository.py
+    location_repository.py
+    asset_repository.py
+    category_repository.py
   models/
-    user.py                     # User ORM model + UserRole enum
-    token.py                    # RefreshToken ORM model
+    base.py                     # UTCDateTime TypeDecorator
+    user.py
+    token.py
+    location.py
+    asset.py
   schemas/
-    user.py                     # Pydantic v2 read/write schemas
-    auth.py                     # Login, token, refresh schemas
+    auth.py
+    user.py
+    location.py
+    asset.py
   db/
-    session.py                  # Engine, WAL, FK pragma, get_db
+    session.py
   core/
-    config.py                   # Pydantic BaseSettings (env-aware)
-    security.py                 # bcrypt, JWT create/decode, JTI hash
-    exceptions.py               # Custom HTTPException subclasses
-    dependencies.py             # FastAPI DI providers + get_current_user
+    config.py
+    security.py
+    exceptions.py
+    dependencies.py
 
 alembic/
-  env.py
-  versions/0001_initial.py
-
-tests/
-  conftest.py                   # In-memory DB, fixtures, token helpers
-  test_auth.py
-  test_users.py
-  test_repositories.py
+  versions/
+    0001_initial.py             # users + refresh_tokens
+    0002_assets.py              # locations, assets, transactions, audit
 ```
 
 ---
 
-## Quick Start
-
-### 1. Install uv (if not already installed)
-
-```bash
-# macOS / Linux
-curl -LsSf https://astral.sh/uv/install.sh | sh
-
-# Windows
-powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
-```
-
-### 2. Create the environment and install dependencies
-
-```bash
-# uv reads .python-version (3.11) and pyproject.toml automatically.
-uv sync           # production deps only
-uv sync --group dev     # include dev/test deps (needed for running tests)
-```
-
-This creates `.venv/` in the project root. You never need to activate it manually
-— prefix commands with `uv run` and uv handles it.
-
-### 3. Configure environment
-
-```bash
-# .env.dev is already present — edit SECRET_KEY before use.
-```
-
-Generate a real secret key:
-```bash
-uv run python -c "import secrets; print(secrets.token_hex(32))"
-```
-
-### 4. Run migrations
-
-```bash
-uv run alembic upgrade head
-```
-
-This creates `data/dev.db` with `users` and `refresh_tokens` tables.
-
-### 5. Create the superuser (one-time)
-
-```bash
-uv run python -m app.cli create-superuser
-```
-
-You will be prompted for email, username, display name, and password.
-Only one superuser can ever exist.
-
-### 6. Start the server
-
-```bash
-uv run uvicorn app.main:app --reload
-```
-
-API docs: http://localhost:8000/api/v1/docs
-
-## Environments
-
-| `APP_ENV` | DB file | Config file |
-|---|---|---|
-| `dev` | `data/dev.db` | `.env.dev` |
-| `test` | in-memory | `.env.test` |
-| `uat` | `data/uat.db` | `.env.uat` |
-| `prod` | `data/prod.db` | `.env.prod` |
-
-Switch environments with:
-```bash
-APP_ENV=uat alembic upgrade head
-APP_ENV=uat uvicorn app.main:app
-```
-
----
-
-## Authentication Flow
-
-### Login
-```
-POST /api/v1/auth/login
-{"identifier": "user@example.com", "password": "..."}   # or username
-
-→ {"access_token": "...", "refresh_token": "...", "token_type": "bearer"}
-```
-
-- `identifier` accepts either email or username (case-insensitive).
-- Access token: 15 min, stateless (not stored in DB).
-- Refresh token: 30 days, stored as `SHA256(jti)` in `refresh_tokens` table.
-
-### Authenticated request
-```
-GET /api/v1/users/me
-Authorization: Bearer <access_token>
-```
-
-### Refresh (token rotation)
-```
-POST /api/v1/auth/refresh
-{"refresh_token": "..."}
-
-→ new {"access_token": "...", "refresh_token": "..."}
-```
-The old refresh token is immediately revoked. Replaying it returns 401.
-
-### Logout
-```
-POST /api/v1/auth/logout
-{"refresh_token": "..."}
-
-→ 204 No Content
-```
-
----
-
-## User Roles & Permissions
+## User roles and permissions
 
 | Action | superuser | admin | user |
 |---|---|---|---|
 | Create superuser | CLI only | ✗ | ✗ |
 | Create admin | ✓ | ✗ | ✗ |
 | Create user | ✓ | ✓ | ✗ |
-| List all users | ✓ | ✓ | ✗ |
-| View any user | ✓ | ✓ | own only |
+| List / view any user | ✓ | ✓ | own only |
 | Update user details | ✓ | users only | ✗ |
 | Suspend a user | ✓ | users only | ✗ |
 | Change role | ✓ | ✗ | ✗ |
@@ -191,133 +88,121 @@ POST /api/v1/auth/logout
 | Update own profile | ✓ | ✓ | ✓ |
 | Can be suspended | ✗ | ✓ | ✓ |
 
-No self-registration. All accounts are created by admins or the superuser.
+No self-registration — all accounts are created by admins or the superuser.
 
 ---
 
-## API Endpoints
+## API endpoints
 
 ### Auth
+
 | Method | Path | Description |
 |---|---|---|
-| POST | `/api/v1/auth/login` | Login (email or username) |
+| POST | `/api/v1/auth/login` | Login with email or username |
 | POST | `/api/v1/auth/refresh` | Refresh token rotation |
 | POST | `/api/v1/auth/logout` | Revoke refresh token |
 
 ### Users
+
 | Method | Path | Auth | Description |
 |---|---|---|---|
 | GET | `/api/v1/users/me` | Any | Get own profile |
-| PATCH | `/api/v1/users/me` | Any | Update own display_name / password |
+| PATCH | `/api/v1/users/me` | Any | Update own display name / password |
 | GET | `/api/v1/users/` | Admin+ | List users |
 | POST | `/api/v1/users/` | Admin+ | Create user |
 | GET | `/api/v1/users/{id}` | Admin+ / own | Get user |
 | PATCH | `/api/v1/users/{id}` | Admin+ | Update user |
 | DELETE | `/api/v1/users/{id}` | Superuser | Delete user |
 
+### Locations
+
+| Method | Path | Description |
+|---|---|---|
+| GET/POST | `/api/v1/locations/` | List / create storage locations |
+| GET/PATCH/DELETE | `/api/v1/locations/{id}` | Manage a location |
+| GET/POST | `/api/v1/locations/{id}/details` | List / create sub-locations |
+| GET/PATCH/DELETE | `/api/v1/locations/{id}/details/{id}` | Manage a sub-location |
+
+### Assets
+
+| Method | Path | Description |
+|---|---|---|
+| GET/POST | `/api/v1/assets/` | List / create assets |
+| GET/PATCH/DELETE | `/api/v1/assets/{id}` | Manage an asset |
+| POST | `/api/v1/assets/{id}/image` | Upload / replace image |
+| GET/POST | `/api/v1/assets/{id}/transactions` | Stock history / add movement |
+| GET/POST | `/api/v1/categories/` | List / create categories |
+| PATCH/DELETE | `/api/v1/categories/{id}` | Manage a category |
+| GET | `/api/v1/audit/` | Audit log (admin+ only) |
+
 ### System
+
 | Method | Path | Description |
 |---|---|---|
 | GET | `/health` | Health check (no auth) |
 
+Interactive docs (when running): http://localhost:8000/api/v1/docs
+
 ---
 
-## Running Tests
+## Authentication
+
+Login accepts either email or username:
+
+```
+POST /api/v1/auth/login
+{"identifier": "user@example.com", "password": "..."}
+
+→ {"access_token": "...", "refresh_token": "...", "token_type": "bearer"}
+```
+
+- Access token: 15 min, stateless (not stored in DB)
+- Refresh token: 30 days, stored as `SHA256(jti)` in the DB
+- Rotation: every refresh call revokes the old token and issues a new pair
+
+### Password policy
+
+- Minimum 12 characters, maximum 128
+- Must achieve a zxcvbn strength score of 3 or higher
+- Checked against the HIBP breach database when `CHECK_PWNED_PASSWORDS=true`
+  (intended for public-facing deployments)
+
+---
+
+## Location privacy
+
+Storage locations and sub-locations can be marked private. Privacy cascades
+downward — a private location makes everything inside it private regardless
+of the sub-location's own setting.
+
+| Who can see a private resource | |
+|---|---|
+| Superuser | Always |
+| Owner | Always |
+| Admin | Only if the resource is shared |
+| Other users | Never |
+
+---
+
+## Running tests
 
 ```bash
-# Install dev dependencies first (includes pytest, httpx, etc.)
 uv sync --group dev
-
 APP_ENV=test uv run pytest
+APP_ENV=test uv run pytest --cov=app --cov-report=term-missing
 ```
-
-Tests use an in-memory SQLite database. The `get_db` dependency is overridden
-so each test runs in a rolled-back transaction — no state bleeds between tests.
-
-```bash
-APP_ENV=test uv run pytest --cov=app --cov-report=term-missing   # with coverage
-```
-
----
-
-## Docker Deployment
-
-### Build & run
-
-```bash
-# Copy and fill in your production env file
-cp .env.prod.template .env.prod
-# Edit .env.prod — set a real SECRET_KEY
-
-docker compose up -d --build
-```
-
-### nginx reverse proxy
-
-The app container is not exposed externally. Add to your nginx config:
-
-```nginx
-location /api/ {
-    proxy_pass http://assetmgmt_app:8000;
-    proxy_set_header Host $host;
-    proxy_set_header X-Real-IP $remote_addr;
-    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-    proxy_set_header X-Forwarded-Proto $scheme;
-}
-```
-
-The `docker-compose.yml` joins the `nginx_proxy_network` external network.
-Change the `name:` field under `proxy_network:` to match your existing setup.
-
-### Data persistence
-
-The SQLite file lives in the `assetmgmt_data` named Docker volume, mounted at
-`/app/data/prod.db`. It survives container restarts and image rebuilds.
-
-### Create superuser in Docker
-
-```bash
-docker compose exec app uv run python -m app.cli create-superuser
-```
-
-### Run migrations in Docker
-
-Migrations run automatically on container startup (in the CMD). To run them
-manually:
-
-```bash
-docker compose exec app uv run alembic upgrade head
-```
-
----
-
-## Security Notes
-
-- **Refresh token storage**: only `SHA256(jti)` is stored — a raw DB dump
-  cannot be replayed without also knowing `SECRET_KEY`.
-- **Access tokens**: never stored in DB; validated stateless on every request.
-- **Token rotation**: every refresh call revokes the old token and issues a new
-  pair. Replay of an old refresh token returns 401.
-- **Suspension**: suspended users are rejected at both login and on every
-  authenticated request (access-token validation re-checks `is_active`).
-- **Superuser**: cannot be suspended via API. Cannot be deleted. Can only be
-  created via CLI.
 
 ---
 
 ## Migrations
 
-Generate a new migration after model changes:
-
 ```bash
-alembic revision --autogenerate -m "describe your change"
-alembic upgrade head
+# Apply all pending migrations
+uv run alembic upgrade head
+
+# Generate a migration after model changes
+uv run alembic revision --autogenerate -m "describe change"
+
+# Roll back one migration
+uv run alembic downgrade -1
 ```
-
-Downgrade:
-
-```bash
-alembic downgrade -1
-```
-
-SQLite `ALTER TABLE` is handled via `render_as_batch=True` in `alembic/env.py`.

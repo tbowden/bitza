@@ -1,52 +1,131 @@
-# Angular specific
-/dist/
-/out-tsc/
-/tmp/
-/coverage/
-/e2e/test-output/
-/.angular/
-.angular/
+# =============================================================================
+# bitza — top-level .gitignore
+# Covers: Python backend, Angular frontend, editors, OS artefacts.
+# A more specific backend/.gitignore also exists as a belt-and-braces backup.
+# =============================================================================
 
-# Node modules and dependency files
-/node_modules/
-/package-lock.json
-/yarn.lock
 
-# Environment files
+# -----------------------------------------------------------------------------
+# Python
+# -----------------------------------------------------------------------------
+__pycache__/
+*.py[cod]          # compiled (.pyc), optimised (.pyo), dynamic (.pyd)
+*.pyd
+.Python
+*.egg-info/
+.eggs/
+*.egg
+wheels/
+
+
+# -----------------------------------------------------------------------------
+# Virtual environments
+# uv creates .venv/ — bare venv/ and env/ kept as safety nets.
+# -----------------------------------------------------------------------------
+.venv/
+venv/
+env/
+
+
+# -----------------------------------------------------------------------------
+# uv
+# uv.lock should be committed for applications — do not ignore it.
+# -----------------------------------------------------------------------------
+
+
+# -----------------------------------------------------------------------------
+# Environment files — never commit real secrets
+# .env.dev is generally safe to commit if it contains no real secrets.
+# -----------------------------------------------------------------------------
 .env
+.env.prod
+.env.uat
 
-# Angular CLI and build artefacts
-/.angular-cli.json
-/.ng/
 
-# TypeScript cache
+# -----------------------------------------------------------------------------
+# SQLite databases
+# -----------------------------------------------------------------------------
+*.db
+*.db-shm
+*.db-wal
+data/
+
+
+# -----------------------------------------------------------------------------
+# Testing and coverage
+# -----------------------------------------------------------------------------
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+
+# -----------------------------------------------------------------------------
+# Build artefacts
+# Applies to both Python (dist/, build/) and Angular (dist/, out-tsc/).
+# -----------------------------------------------------------------------------
+dist/
+build/
+out-tsc/
+tmp/
+coverage/
+
+
+# -----------------------------------------------------------------------------
+# Angular / frontend
+# -----------------------------------------------------------------------------
+e2e/test-output/
+.angular/
+.angular-cli.json
+.ng/
 *.tsbuildinfo
 
+
+# -----------------------------------------------------------------------------
+# Node
+# -----------------------------------------------------------------------------
+node_modules/
+package-lock.json
+yarn.lock
+
+
+# -----------------------------------------------------------------------------
 # Logs
+# -----------------------------------------------------------------------------
+*.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
 
-# My changes 
-#(prolly no longer needed if I'm going to use uv to manage python env?)
-venv/
-*.log
-data/*.db
+# -----------------------------------------------------------------------------
+# Vim / Neovim
+# -----------------------------------------------------------------------------
+*.swp          # swap file (active edit session)
+*.swo          # swap overflow
+*.swn          # swap overflow (secondary)
+*~             # backup files
+.netrwhist     # netrw file browser history
+Session.vim    # saved sessions (:mksession)
+tags           # ctags / cscope tag index
 
-# merge in default uv generated contents
 
-# Python-generated files
-__pycache__/
-*.py[oc]
-build/
-dist/
-wheels/
-*.egg-info
+# -----------------------------------------------------------------------------
+# IDE
+# -----------------------------------------------------------------------------
+.vscode/
+.idea/
 
-# temporary stuff. Regularly clear these settings out
+
+# -----------------------------------------------------------------------------
+# OS
+# -----------------------------------------------------------------------------
+.DS_Store
+Thumbs.db
+
+
+# -----------------------------------------------------------------------------
+# Temporary / scratch files — clear this section out regularly
+# -----------------------------------------------------------------------------
 old_logging.py
 logtest.py
-# Virtual environments
-.venv
-
