@@ -129,3 +129,6 @@ Thumbs.db
 # -----------------------------------------------------------------------------
 old_logging.py
 logtest.py
+
+# stuff I download from claude
+claude/
