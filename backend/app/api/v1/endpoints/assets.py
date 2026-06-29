@@ -1,6 +1,8 @@
+import mimetypes
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Query, UploadFile, File, status
+from fastapi.responses import FileResponse
 
 from app.core.dependencies import get_current_user, get_asset_service
 from app.models.user import User
@@ -176,6 +178,39 @@ def delete_asset(
     svc: AssetService = Depends(get_asset_service),
 ) -> None:
     svc.delete_asset(asset_id=asset_id, actor=current_user)
+
+
+@assets_router.get(
+    "/{asset_id}/image",
+    summary="Get the image for an asset",
+    response_class=FileResponse,
+    responses={
+        200: {"content": {"image/*": {}}, "description": "The asset image"},
+        404: {"description": "Asset not found, not visible, or has no image"},
+    },
+)
+def get_asset_image(
+    asset_id: str,
+    current_user: User = Depends(get_current_user),
+    svc: AssetService = Depends(get_asset_service),
+) -> FileResponse:
+    """
+    Stream the asset's image file.
+
+    Applies the same access rules as GET /assets/{id} — if you cannot see
+    the asset you cannot see its image.
+
+    Note for the Angular frontend: browsers do not send Authorization headers
+    with plain <img> tags. Fetch this endpoint via HttpClient with
+    { responseType: 'blob' } and create a blob URL for display.
+    Remember to call URL.revokeObjectURL() when the component is destroyed.
+    """
+    abs_path = svc.get_asset_image_path(asset_id=asset_id, actor=current_user)
+    media_type, _ = mimetypes.guess_type(abs_path)
+    return FileResponse(
+        abs_path,
+        media_type=media_type or "application/octet-stream",
+    )
 
 
 @assets_router.post(

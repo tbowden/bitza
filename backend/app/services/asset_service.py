@@ -274,6 +274,25 @@ class AssetService:
     # Image upload
     # ------------------------------------------------------------------ #
 
+    def get_asset_image_path(self, asset_id: str, actor: User) -> str:
+        """
+        Return the absolute filesystem path to the asset's image.
+        Applies the same visibility rules as get_asset().
+        Raises 404 if the asset is not visible, has no image, or the file
+        is missing from disk (e.g. after a manual cleanup).
+        """
+        asset = self._assets.get(asset_id)
+        if not asset or not self._asset_visible_to(asset, actor):
+            raise _not_found("Asset not found")
+        if not asset.image_path:
+            raise _not_found("This asset has no image")
+
+        abs_path = Path(settings.UPLOAD_DIR) / asset.image_path
+        if not abs_path.exists():
+            raise _not_found("Image file not found")
+
+        return str(abs_path)
+
     async def upload_image(
         self, asset_id: str, file: UploadFile, actor: User
     ) -> AssetRead:
