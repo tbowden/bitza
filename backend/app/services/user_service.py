@@ -57,6 +57,31 @@ class UserService:
     # Superuser bootstrap (CLI only)
     # ------------------------------------------------------------------
 
+    def get_superuser(self) -> Optional[User]:
+        """
+        Return the existing superuser, if any.
+
+        CLI helper — no actor required, since the CLI itself is the
+        trusted boundary (it has direct DB access, unlike API requests).
+        """
+        return self._user_repo.get_superuser()
+
+    def delete_superuser(self) -> None:
+        """
+        Permanently delete the existing superuser, if one exists.
+
+        CLI-only helper for the "replace existing superuser" flow — bypasses
+        the actor-based permission checks used by delete_user(), since the
+        CLI is the trusted boundary here, not an authenticated API request.
+        Cascades to the superuser's refresh tokens via FK ON DELETE CASCADE.
+        No-op if no superuser exists.
+        """
+        existing = self._user_repo.get_superuser()
+        if not existing:
+            return
+        self._user_repo.delete(existing)
+        self._db.commit()
+
     async def create_superuser(
         self,
         email: str,

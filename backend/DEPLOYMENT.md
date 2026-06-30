@@ -46,13 +46,18 @@ cd bitza
 uv sync --group dev
 ```
 
-uv reads `.python-version` (Python 3.11) and `pyproject.toml` automatically
+uv reads `.python-version` (Python 3.12) and `pyproject.toml` automatically
 and creates a `.venv` directory. You never need to activate it manually.
 
 ### 3. Configure the environment
 
-The `.env.dev` file is already present and safe to use for local development.
-Open it and set a real secret key:
+Copy the template and set a real secret key:
+
+```bash
+cp .env.dev.template .env.dev
+```
+
+Open `.env.dev` and set a real secret key:
 
 ```bash
 # Generate a secret key
@@ -60,6 +65,8 @@ uv run python -c "import secrets; print(secrets.token_hex(32))"
 ```
 
 Paste the output as the value of `SECRET_KEY` in `.env.dev`.
+(The placeholder is fine for pure localhost development — only set a real
+key if you ever run uvicorn with `--host 0.0.0.0` so it's reachable on your network.)
 
 ### 4. Create the database and run migrations
 
@@ -114,7 +121,7 @@ cd bitza
 ### 2. Configure the UAT environment
 
 ```bash
-cp .env.uat .env.uat.local   # optional — edit .env.uat directly if preferred
+cp .env.uat.template .env.uat
 ```
 
 Open `.env.uat` and set a real secret key:
