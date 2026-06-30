@@ -36,8 +36,11 @@ env/
 # -----------------------------------------------------------------------------
 # Environment files — never commit real secrets
 # .env.dev is generally safe to commit if it contains no real secrets.
+# Update: now using .env.*.template in the repo
+# but .env.test is only ever used locally in memory so can be kept in the repo
 # -----------------------------------------------------------------------------
 .env
+.env.dev
 .env.prod
 .env.uat
 
