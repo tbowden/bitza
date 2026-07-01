@@ -1,4 +1,4 @@
-# FastAPI CRUD API — Project Context Instructions
+# FastAPI CRUD API — Project context instructions
 
 General-purpose system instructions for building production-disciplined CRUD
 APIs using FastAPI, SQLAlchemy (sync), SQLite, and uv. These instructions apply
@@ -7,13 +7,13 @@ etc. Auth and JWT sections apply only when authentication is required.
 
 ---
 
-## 1. Core Technology Stack (MANDATORY)
+## 1. Core technology stack (MANDATORY)
 
-- Python 3.11+ managed by **uv** (see Section 12)
+- Python 3.12+ managed by **uv** (see Section 12)
 - FastAPI (latest stable)
 - SQLAlchemy 2.x — **synchronous DB access only** (see Section 9 for when async is appropriate)
 - Pydantic v2
-- SQLite — no external database
+- SQLite — no external database (with SpatiaLite extension when required for spatial data)
 - Alembic for migrations
 - pytest for testing
 - JWT: `python-jose` + `bcrypt` (when auth is required)
@@ -51,20 +51,22 @@ DB (engine + session only)
 - No ORM queries — delegate entirely to repositories
 - Own all business logic, permission checks, and transaction commits
 - Enrich response objects with denormalised display fields via `_enrich_*` private methods
+- Methods that perform external I/O (HTTP calls, file writes) must be `async def`
+  (see Section 9); all other service methods remain synchronous
 
 **Repositories:**
 - No business logic
 - DB interaction only: reads, writes, deletes
 - Use `flush()` not `commit()` — the service layer owns transaction boundaries
 - Return ORM model instances
-- Always synchronous
+- Always synchronous — repositories never use async/await
 
 **DB layer:**
 - Session and engine management only
 
 ---
 
-## 3. Required Project Structure
+## 3. Required project structure
 
 ```
 app/
@@ -115,7 +117,7 @@ uv.lock
 
 ---
 
-## 4. Database Configuration (SQLite)
+## 4. Database configuration (SQLite)
 
 ### Engine setup
 
@@ -194,9 +196,22 @@ SQLite has no native array type. Use `JSON` for list fields (e.g. tags):
 tags: Mapped[list | None] = mapped_column(JSON, nullable=True, default=list)
 ```
 
+### Hierarchical / self-referential data
+
+For tree structures (e.g. a recursive location hierarchy), use an adjacency
+list — a nullable `parent_id` FK pointing to the same table. Do not use
+nested sets, closure tables, or graph/document stores.
+
+Design queries to target direct parent-child relationships wherever possible
+(single non-recursive `WHERE parent_id = ?` queries). Reserve `WITH RECURSIVE`
+CTEs for the rare cases where ancestor path resolution is genuinely needed
+(e.g. building a display breadcrumb). Never perform full subtree traversal
+on the backend — the frontend should drive recursive exploration via multiple
+direct-children requests, each fetching one level at a time.
+
 ---
 
-## 5. Schema Design (Pydantic v2)
+## 5. Schema design (Pydantic v2)
 
 Define **separate** schemas for each purpose:
 
@@ -214,7 +229,7 @@ Rules:
 
 ---
 
-## 6. Authentication — JWT Hybrid (when required)
+## 6. Authentication — JWT hybrid (when required)
 
 ### Token types
 
@@ -244,18 +259,19 @@ revoke old token → issue new pair (rotation)
 
 ### Password policy
 
-- Password strength must be evaluated using zxcvbn.
-- A password is only acceptable if it achieves a zxcvbn score of 3 or higher.
-- Passwords must have a minimum length of 12 and maximum length of 128 chars.
-- Password composition rules (uppercase, digits, symbols) must not be used as
-  the primary strength mechanism — zxcvbn is the gate.
-- Passwords must also be checked against known breached password datasets unless
-  the app is expected to run on a non-public-facing network. Implement via the
-  HIBP k-anonymity API using an async `httpx.AsyncClient` call (see Section 9).
-  Gate the check behind a `CHECK_PWNED_PASSWORDS: bool = False` setting so it
-  can be enabled for public deployments without code changes.
-- The breach check must fail open on network errors — a transient HIBP outage
-  must never prevent a legitimate password change.
+- Evaluate password strength using `zxcvbn`. A password is only acceptable
+  if it achieves a score of 3 or higher (0–4 scale).
+- Minimum length: 12 characters. Maximum: 128 characters.
+- Do not use composition rules (uppercase, digits, symbols) as the primary
+  strength mechanism — zxcvbn is the gate.
+- Check passwords against the HIBP k-anonymity API unless the app is expected
+  to run on a non-public-facing network. Implement via `httpx.AsyncClient`
+  (see Section 9). Gate behind `CHECK_PWNED_PASSWORDS: bool = False` in
+  settings so it can be enabled for public deployments without code changes.
+- The breach check must **fail open** on network errors — a transient HIBP
+  outage must never prevent a legitimate password change.
+- Backend validation is authoritative. Frontend validation (also using `zxcvbn`)
+  is advisory only — provides real-time feedback but does not block submission.
 
 ### Security rules
 
@@ -267,7 +283,7 @@ revoke old token → issue new pair (rotation)
 
 ---
 
-## 7. Repository Layer Rules
+## 7. Repository layer rules
 
 - Accept a `Session` in `__init__`
 - Return ORM model instances
@@ -278,7 +294,7 @@ revoke old token → issue new pair (rotation)
 
 ---
 
-## 8. Service Layer Rules
+## 8. Service layer rules
 
 - No direct ORM queries — use repositories only
 - Own all `commit()` calls — repositories only flush
@@ -292,7 +308,7 @@ revoke old token → issue new pair (rotation)
 
 ---
 
-## 9. Sync vs Async
+## 9. Sync vs async
 
 ### The core rule
 
@@ -355,18 +371,16 @@ import asyncio
 def create_superuser_command(...) -> None:
     async def _run():
         user = await service.create_superuser(...)
-
     asyncio.run(_run())
 ```
 
 Never call `asyncio.run()` inside a route handler or any other async context —
 it will raise a `RuntimeError` because an event loop is already running.
-FastAPI handles the event loop for route handlers automatically.
 
 ### External HTTP calls
 
 Always use `httpx.AsyncClient` for external HTTP calls, never `requests` or
-`httpx` synchronous client:
+the sync `httpx` client:
 
 ```python
 async with httpx.AsyncClient(timeout=5.0) as client:
@@ -378,7 +392,7 @@ services are unreliable and must not break core application functionality.
 
 ---
 
-## 10. API Layer Rules
+## 10. API layer rules
 
 - No business logic — call service, return result
 - Use `response_model` on every endpoint
@@ -387,7 +401,7 @@ services are unreliable and must not break core application functionality.
 - Use appropriate HTTP status codes:
   - `201` for creation
   - `204` for delete / logout (no body)
-  - `404` for not-found (including privacy-masked resources)
+  - `404` for not-found
   - `409` for uniqueness conflicts or blocked deletes
 - Route handlers are `async def` only when they call an async service method;
   otherwise keep them `def` (sync handlers run in FastAPI's thread pool, which
@@ -395,7 +409,7 @@ services are unreliable and must not break core application functionality.
 
 ---
 
-## 11. Dependency Injection
+## 11. Dependency injection
 
 Provide a provider function for every repository and service:
 
@@ -415,7 +429,7 @@ Include a `get_current_user` provider that:
 
 ---
 
-## 12. Environment & uv Configuration (MANDATORY)
+## 12. Environment & uv configuration (MANDATORY)
 
 ### Python version management
 
@@ -423,7 +437,7 @@ Use **uv** for all Python version and environment management. Never use pip,
 venv, or virtualenv directly.
 
 Required files:
-- `.python-version` — pins Python version (e.g. `3.11`)
+- `.python-version` — pins Python version (e.g. `3.12`)
 - `pyproject.toml` — single source of truth for dependencies and tooling config
 - `uv.lock` — reproducible lockfile; **must be committed to version control**
 
@@ -433,7 +447,7 @@ Required files:
 [project]
 name = "<project>"
 version = "0.1.0"
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 dependencies = [
     # runtime deps here
 ]
@@ -446,6 +460,15 @@ dev = [
     "ruff>=0.4.0",
     "mypy>=1.10.0",
 ]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.mypy]
+python_version = "3.12"
+strict = false
+ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -478,6 +501,14 @@ class Settings(BaseSettings):
 
 Use `@lru_cache()` on the `get_settings()` factory.
 
+### Environment file conventions
+
+- `.env.test` — tracked in git (never contains sensitive values)
+- `.env.dev.template`, `.env.uat.template`, `.env.prod.template` — tracked in git (placeholders only)
+- `.env.dev`, `.env.uat`, `.env.prod` — gitignored; generated locally from templates
+- The placeholder `SECRET_KEY` in `.env.dev.template` is acceptable for pure
+  localhost development. Set a real key if running with `--host 0.0.0.0`.
+
 ---
 
 ## 13. Migrations (Alembic)
@@ -497,7 +528,7 @@ uv run alembic downgrade -1
 
 ---
 
-## 14. Transaction Management
+## 14. Transaction management
 
 - Service layer owns all `commit()` calls
 - Repositories call `flush()` + `refresh()` only
@@ -518,6 +549,9 @@ Use pytest with the following conventions:
 - Override `get_db` via `app.dependency_overrides` in the test client fixture
 - Provide fixture users at each role level and corresponding token fixtures
 - Test files: `test_auth.py`, `test_<domain>.py`, `test_repositories.py`
+- CLI tests: use `typer.testing.CliRunner` with a monkeypatched `SessionLocal`
+  pointing at a per-test on-disk SQLite database (not the in-memory one, since
+  the CLI manages its own session internally)
 
 ```bash
 APP_ENV=test uv run pytest
@@ -526,18 +560,23 @@ APP_ENV=test uv run pytest --cov=app --cov-report=term-missing
 
 ---
 
-## 16. File Uploads (when required)
+## 16. File uploads (when required)
 
 - Store files on the server filesystem; record relative paths in the DB
 - Define `UPLOAD_DIR` in settings (e.g. `./data/uploads`)
-- Use relative paths in the DB (e.g. `assets/<id>/image.jpg`), not absolute paths
+- Use relative paths in the DB (e.g. `items/<id>/photo.jpg`), not absolute paths
 - Validate content type and enforce a maximum file size before writing to disk
 - Replace existing files atomically: remove old file, write new, then update DB
 - Use async `UploadFile` in the endpoint; delegate file I/O to the service layer
+- Serve uploaded files via an authenticated endpoint (not as static files) so
+  access control applies. Use `FileResponse` with `mimetypes.guess_type()` for
+  the content type. Angular clients must fetch images via `HttpClient` with
+  `{ responseType: 'blob' }` and create a blob URL — plain `<img src>` tags
+  will not send the Authorization header.
 
 ---
 
-## 17. Error Handling
+## 17. Error handling
 
 - All exceptions must return consistent JSON: `{"detail": "..."}`
 - Define custom `HTTPException` subclasses in `app/core/exceptions.py`
@@ -551,12 +590,10 @@ APP_ENV=test uv run pytest --cov=app --cov-report=term-missing
   - `ConflictError` → 409 (uniqueness violations, blocked deletes)
 - Add a catch-all `Exception` handler in `main.py` returning 500 JSON
   (prevents HTML error pages leaking through a reverse proxy)
-- Use intentionally opaque 404s for privacy-masked resources (do not reveal
-  that a resource exists but is inaccessible)
 
 ---
 
-## 18. Docker & Deployment
+## 18. Docker & deployment
 
 ### Dockerfile
 
@@ -565,6 +602,7 @@ APP_ENV=test uv run pytest --cov=app --cov-report=term-missing
 - Run as a non-root user
 - Mount `data/` as a named Docker volume for SQLite persistence
 - Set `ENV PATH="/app/.venv/bin:$PATH"` and `ENV PYTHONUNBUFFERED=1`
+- Use `python:3.12-slim` as the base image
 
 ### CORS
 
@@ -592,7 +630,7 @@ def health_check():
 
 ---
 
-## 19. Code Quality Rules
+## 19. Code quality rules
 
 - Full type hints on all function signatures and class attributes
 - No duplicated logic across layers
@@ -608,7 +646,7 @@ def health_check():
 
 ---
 
-## 20. Anti-Patterns (STRICTLY FORBIDDEN)
+## 20. Anti-patterns (STRICTLY FORBIDDEN)
 
 **Architecture:**
 - Async DB access or async SQLAlchemy
@@ -644,6 +682,8 @@ def health_check():
 - Calling `commit()` in repositories
 - Sharing DB files across environments
 - Raw SQL strings outside repository methods
+- Full subtree traversal on the backend for hierarchical data — let the
+  frontend drive recursive exploration via multiple direct-children requests
 
 **General:**
 - Hardcoded secrets or credentials anywhere in source code
