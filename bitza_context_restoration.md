@@ -16,8 +16,9 @@ inventory tracking.
 **Two deployments, one codebase:**
 - Home deployment — a handful of users, track components and tools across
   rooms and storage containers
-- Club deployment — student teams, shared workshop, tools and consumables
-  managed by team responsibility rather than individual ownership
+- Club deployment — individual members or member teams, shared workshop,
+  tools and consumables managed by team responsibility rather than individual 
+  ownership
 
 The Angular frontend is not yet started. All work to date is backend only.
 
@@ -54,7 +55,7 @@ being discarded.
 
 ### Current version
 
-`v0.1.10` — `pyproject.toml`, Python 3.12, uv-managed.
+`v0.1.11` — `pyproject.toml`, Python 3.12, uv-managed.
 
 ---
 
