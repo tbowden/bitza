@@ -20,8 +20,10 @@ from app.db.session import get_db
 from app.main import app
 from app.models.base import Base
 from app.models.token import RefreshToken  # noqa: F401
-from app.models.location import StorageLocation, LocationDetail  # noqa: F401
-from app.models.asset import Category, Asset, AssetTransaction, AuditLog  # noqa: F401 — ensure table is registered
+from app.models.team import Team, TeamMember  # noqa: F401
+from app.models.category import Category  # noqa: F401 — ensure table is registered
+from app.models.bitza import Bitza, BitzaImage, Checkout, StockLog  # noqa: F401
+from app.models.audit import AuditLog  # noqa: F401
 from app.models.user import User, UserRole  # noqa: F401
 from app.core.security import hash_password
 
@@ -109,7 +111,7 @@ def client(db: Session) -> TestClient:
 
 
 # ---------------------------------------------------------------------------
-# Pre-built user fixtures
+# Pre-built user fixtures — unchanged from Phase 1/2
 # ---------------------------------------------------------------------------
 
 @pytest.fixture()
@@ -149,6 +151,23 @@ def normal_user(db: Session) -> User:
         username="normaluser",
         display_name="Normal User",
         hashed_password=hash_password("Us3r-C0rrect-Horse!!"),
+        role=UserRole.user,
+        is_active=True,
+    )
+    db.add(user)
+    db.flush()
+    return user
+
+
+@pytest.fixture()
+def second_user(db: Session) -> User:
+    """A second normal user — needed for tests that require two distinct
+    holders/members (team membership, checkout-to-another-user cases)."""
+    user = User(
+        email="second@example.com",
+        username="seconduser",
+        display_name="Second User",
+        hashed_password=hash_password("S3cond-C0rrect-Horse!"),
         role=UserRole.user,
         is_active=True,
     )
@@ -204,3 +223,27 @@ def user_token(client: TestClient, normal_user: User) -> str:
     )
     assert resp.status_code == 200, resp.text
     return resp.json()["access_token"]
+
+
+@pytest.fixture()
+def second_user_token(client: TestClient, second_user: User) -> str:
+    resp = client.post(
+        "/api/v1/auth/login",
+        json={"identifier": "seconduser", "password": "S3cond-C0rrect-Horse!"},
+    )
+    assert resp.status_code == 200, resp.text
+    return resp.json()["access_token"]
+
+
+# ---------------------------------------------------------------------------
+# A default team — most bitza tests need one to satisfy the mandatory
+# responsible_team_id field, so it's provided as a fixture rather than
+# re-created in every test module.
+# ---------------------------------------------------------------------------
+
+@pytest.fixture()
+def default_team(db: Session) -> Team:
+    team = Team(name="Workshop", description="Default test team")
+    db.add(team)
+    db.flush()
+    return team

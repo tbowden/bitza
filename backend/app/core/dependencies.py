@@ -5,14 +5,18 @@ from sqlalchemy.orm import Session
 from app.core.exceptions import UserNotFoundError, UserSuspendedError
 from app.db.session import get_db
 from app.models.user import User
-from app.repositories.asset_repository import AssetRepository
+from app.repositories.audit_repository import AuditRepository
+from app.repositories.bitza_image_repository import BitzaImageRepository
+from app.repositories.bitza_repository import BitzaRepository
 from app.repositories.category_repository import CategoryRepository
-from app.repositories.location_repository import LocationRepository
+from app.repositories.checkout_repository import CheckoutRepository
+from app.repositories.stock_log_repository import StockLogRepository
+from app.repositories.team_repository import TeamRepository
 from app.repositories.token_repository import TokenRepository
 from app.repositories.user_repository import UserRepository
-from app.services.asset_service import AssetService
 from app.services.auth_service import AuthService
-from app.services.location_service import LocationService
+from app.services.bitza_service import BitzaService
+from app.services.team_service import TeamService
 from app.services.user_service import UserService
 
 _bearer = HTTPBearer()
@@ -31,19 +35,35 @@ def get_token_repository(db: Session = Depends(get_db)) -> TokenRepository:
 
 
 # ---------------------------------------------------------------------------
-# Phase 2 — Repository providers
+# Phase 2 (rebuilt) — Repository providers
 # ---------------------------------------------------------------------------
-
-def get_location_repository(db: Session = Depends(get_db)) -> LocationRepository:
-    return LocationRepository(db)
-
 
 def get_category_repository(db: Session = Depends(get_db)) -> CategoryRepository:
     return CategoryRepository(db)
 
 
-def get_asset_repository(db: Session = Depends(get_db)) -> AssetRepository:
-    return AssetRepository(db)
+def get_team_repository(db: Session = Depends(get_db)) -> TeamRepository:
+    return TeamRepository(db)
+
+
+def get_bitza_repository(db: Session = Depends(get_db)) -> BitzaRepository:
+    return BitzaRepository(db)
+
+
+def get_checkout_repository(db: Session = Depends(get_db)) -> CheckoutRepository:
+    return CheckoutRepository(db)
+
+
+def get_stock_log_repository(db: Session = Depends(get_db)) -> StockLogRepository:
+    return StockLogRepository(db)
+
+
+def get_bitza_image_repository(db: Session = Depends(get_db)) -> BitzaImageRepository:
+    return BitzaImageRepository(db)
+
+
+def get_audit_repository(db: Session = Depends(get_db)) -> AuditRepository:
+    return AuditRepository(db)
 
 
 # ---------------------------------------------------------------------------
@@ -67,38 +87,41 @@ def get_user_service(
 
 
 # ---------------------------------------------------------------------------
-# Phase 2 — Service providers
+# Phase 2 (rebuilt) — Service providers
 # ---------------------------------------------------------------------------
 
-def get_location_service(
+def get_team_service(
     db: Session = Depends(get_db),
-    location_repo: LocationRepository = Depends(get_location_repository),
+    team_repo: TeamRepository = Depends(get_team_repository),
     user_repo: UserRepository = Depends(get_user_repository),
-    asset_repo: AssetRepository = Depends(get_asset_repository),
-) -> LocationService:
-    return LocationService(
-        db=db,
-        location_repo=location_repo,
-        user_repo=user_repo,
-        asset_repo=asset_repo,
+    bitza_repo: BitzaRepository = Depends(get_bitza_repository),
+) -> TeamService:
+    return TeamService(
+        db=db, team_repo=team_repo, user_repo=user_repo, bitza_repo=bitza_repo
     )
 
 
-def get_asset_service(
+def get_bitza_service(
     db: Session = Depends(get_db),
-    asset_repo: AssetRepository = Depends(get_asset_repository),
-    cat_repo: CategoryRepository = Depends(get_category_repository),
-    loc_repo: LocationRepository = Depends(get_location_repository),
+    bitza_repo: BitzaRepository = Depends(get_bitza_repository),
+    team_repo: TeamRepository = Depends(get_team_repository),
+    category_repo: CategoryRepository = Depends(get_category_repository),
     user_repo: UserRepository = Depends(get_user_repository),
-    loc_service: LocationService = Depends(get_location_service),
-) -> AssetService:
-    return AssetService(
+    checkout_repo: CheckoutRepository = Depends(get_checkout_repository),
+    stock_log_repo: StockLogRepository = Depends(get_stock_log_repository),
+    image_repo: BitzaImageRepository = Depends(get_bitza_image_repository),
+    audit_repo: AuditRepository = Depends(get_audit_repository),
+) -> BitzaService:
+    return BitzaService(
         db=db,
-        asset_repo=asset_repo,
-        cat_repo=cat_repo,
-        loc_repo=loc_repo,
+        bitza_repo=bitza_repo,
+        team_repo=team_repo,
+        category_repo=category_repo,
         user_repo=user_repo,
-        loc_service=loc_service,
+        checkout_repo=checkout_repo,
+        stock_log_repo=stock_log_repo,
+        image_repo=image_repo,
+        audit_repo=audit_repo,
     )
 
 

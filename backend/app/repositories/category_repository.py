@@ -3,11 +3,18 @@ from typing import Optional
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.models.asset import Asset, Category
+from app.models.bitza import Bitza
+from app.models.category import Category
 
 
 class CategoryRepository:
-    """Data-access layer for the categories table."""
+    """
+    Data-access layer for the categories table.
+
+    Unchanged in shape from Phase 2 — the only change is count_bitzas
+    (renamed from count_assets) now counting against the unified Bitza
+    table instead of the old Asset table.
+    """
 
     def __init__(self, db: Session) -> None:
         self._db = db
@@ -23,9 +30,9 @@ class CategoryRepository:
         stmt = select(Category).order_by(Category.name)
         return list(self._db.scalars(stmt).all())
 
-    def count_assets(self, category_id: str) -> int:
-        stmt = select(func.count()).select_from(Asset).where(
-            Asset.category_id == category_id
+    def count_bitzas(self, category_id: str) -> int:
+        stmt = select(func.count()).select_from(Bitza).where(
+            Bitza.category_id == category_id
         )
         return self._db.scalar(stmt) or 0
 
