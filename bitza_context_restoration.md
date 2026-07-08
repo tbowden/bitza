@@ -1,253 +1,160 @@
-# Bitza — context restoration document
+# Bitza — context restoration
 
-Use this document at the start of a new chat to restore full project context.
-Upload this document alongside the FastAPI context instructions and the Bitza
-project context document.
+**Purpose of this document:** this is the "start here" briefing for a new
+chat picking up work on Bitza. It tells you what stage the project is at,
+where to find the detailed design/API contract, and what's expected next.
+It is deliberately short — for the full domain model, API shapes, and the
+reasoning behind every design decision, see **`bitza_project_context.md`**
+(also at repo root). Read that document before writing any frontend code
+against the API; this one just orients you.
 
----
-
-## What Bitza is
-
-An asset and stock custody and storage tracking system. Originally conceived as a
-home inventory tracker ("bitza this and bitza that"), now designed to also
-serve clubs and organisations with ad-hoc team or project based asset or 
-inventory tracking.
-
-**Two deployments, one codebase:**
-- Home deployment — a handful of users, track components and tools across
-  rooms and storage containers
-- Club deployment — individual members or member teams, shared workshop,
-  tools and consumables managed by team responsibility rather than individual 
-  ownership
-
-The Angular frontend is not yet started. All work to date is backend only.
-
-**Project location:** `bitza/backend/` within a monorepo (`bitza/frontend/`
-reserved for Angular).
+If you are a fresh Claude instance reading this for the first time: welcome.
+Read this file, then read `bitza_project_context.md` in full before doing
+anything else. Do not assume you already know the API shape from general
+FastAPI conventions — several of Bitza's design choices (no ownership
+model, retire-vs-delete, team reassignment cascade, checkout as derived
+state) are deliberate and non-obvious, and are documented there.
 
 ---
 
-## Current state of the codebase
+## What Bitza is (one paragraph)
 
-### What's built and tested (do not change)
-
-**Phase 1 — auth and user management.** Fully built, 103 tests passing,
-production-ready. This entire layer is settled and should not be touched
-during the Phase 2 redesign.
-
-Files:
-- `app/models/user.py`, `app/models/token.py`
-- `app/schemas/auth.py`, `app/schemas/user.py`
-- `app/repositories/user_repository.py`, `app/repositories/token_repository.py`
-- `app/services/auth_service.py`, `app/services/user_service.py`
-- `app/api/v1/endpoints/auth.py`, `app/api/v1/endpoints/users.py`
-- `app/cli.py` (create-superuser command with delete-and-replace flow)
-- `alembic/versions/0001_initial.py`
-- `tests/test_auth.py`, `tests/test_users.py`, `tests/test_repositories.py`,
-  `tests/test_cli.py`
-
-**Phase 2 — locations and assets.** Built but being completely redesigned.
-The existing Phase 2 code (`app/models/location.py`, `app/models/asset.py`,
-their repos, services, endpoints, and `alembic/versions/0002_assets.py`)
-will be replaced. The existing Phase 2 tests (`tests/test_assets.py`) will
-also be replaced. Do not build on top of the existing Phase 2 code — it is
-being discarded.
-
-### Current version
-
-`v0.1.11` — `pyproject.toml`, Python 3.12, uv-managed.
+A tracker for physical stuff — originally home workshop components and
+tools, now generalised to also serve community or student clubs with
+rotating membership and multiple potentially overlaping teams or projects. 
+One unified data model serves both; the club case is simply the richer end of 
+the same schema. Backend: FastAPI + SQLite. Frontend: Angular (not yet developed).
 
 ---
 
-## The redesign — what's been agreed
+## Stage tracker
 
-### Core philosophy
+| Stage | Scope | Status |
+|---|---|---|
+| **1** | Auth, users, roles (superuser/admin/user), JWT refresh/rotation, password policy | ✅ Done, tested, untouched since |
+| **2** | Unified `Team`/`Bitza` backend model — replaces the original `StorageLocation`/`LocationDetail`/`Asset` design entirely | ✅ Done, tested (58/58 passing: Phase 1 unaffected + full new Team/Bitza suite) |
+| **3** | Angular frontend | 🔲 Not started — this is the next piece of work |
 
-This is a **scan-driven custody and storage system**, not an inventory
-management system. It answers two questions:
-
-1. Where is this item right now?
-2. Where should it go when not in use?
-
-It explicitly does **not** do: audit-grade history, approval workflows,
-reservations, return deadlines, cost tracking, or complex permission systems
-at the item level. The existing auth/user permission system (superuser/admin/user)
-stays exactly as-is.
-
-Prefer "good enough and current" over "complete and historical."
-
-### The unified Thing model
-
-The key insight: storage locations and items are the same kind of entity.
-A toolbox is a location when you look inside it, and a trackable item when
-you ask who has it. Collapse both into one self-referential `Thing` table
-with a `mobility` discriminator.
-
-**Thing table:**
-
-| Field | Notes |
-|---|---|
-| id, name, description | |
-| parent_id | Nullable FK → Thing.id (adjacency list, arbitrary depth) |
-| responsible_team_id | Nullable FK → Team. Cascades from nearest ancestor that has one set; overrideable at any depth. Purely informational — no permission gating. |
-| scan_tag | Nullable, unique. NFC UID or generated QR code. Any level can have one. |
-| tag_source | `external` \| `generated` \| null |
-| mobility | `fixed` \| `mobile` \| `stock` (see below) |
-| category_id | Nullable FK → Category |
-| tags | JSON array of strings |
-| purchased_by_user_id | Nullable FK → User. Set at creation, never changes. "Who to ask." |
-| vendor | Nullable text |
-| purchase_date | Nullable date (separate from created_at — gear may be entered long after purchase) |
-| order_url | Nullable text |
-| created_by_user_id | FK → User |
-| created_at, updated_at | UTCDateTime |
-
-**mobility = fixed** — a room, shelf, wall-mounted pegboard. Cannot be
-checked out. Just a node in the location tree. Can have a scan tag (scan
-the shelf to see what's on it).
-
-**mobility = mobile** — a toolbox, multimeter, torque wrench. Can be checked
-out. Its "home" is its `parent_id` in the tree. Has checkout state columns:
-`current_holder_id` (nullable FK → User), `checked_out_at` (nullable
-UTCDateTime), `checkout_context` (nullable text — free-form snapshot of why,
-e.g. "Suspension team — wheel bearing job").
-
-**mobility = stock** — resistors, screws, heatshrink. Managed by quantity
-rather than identity. Has stock columns: `stock_mode` (`exact` \| `fuzzy`),
-`quantity` (nullable int), `low_stock_threshold` (nullable int),
-`fuzzy_state` (nullable — small enum: `plentiful` \| `low` \| `empty`).
-
-### Supporting tables
-
-**Team** — id, name, description. Universal owning entity. Home deployment
-= a team of one (or a household). Club deployment = a dozen+ specialist
-teams. UI label configurable: "Team" for club, "Project" for home — this
-distinction is purely a frontend label, the backend always calls it "team."
-
-**Fixme: users can belong to multiple teams**
-**TeamMembership** — user_id, team_id. Current membership only (no history,
-no start/end dates). Each user has at most one current team. Self-editable
-via the profile endpoint. Purpose: default pre-fill for `checkout_context`
-when checking something out. Fully overrideable at checkout time (a student
-helping another team can check out on behalf of that team).
-
-**ThingImage** *(replaces single image_path field)* — id, thing_id,
-image_path, is_primary (bool), uploaded_at, uploaded_by_user_id. Exactly
-one image per thing may have `is_primary = true`. Setting a new primary
-unsets the old one (like refresh token rotation). Served via the same
-authenticated endpoint pattern as the current image serving endpoint.
-
-**CheckoutLog** — id, thing_id, holder_id, checkout_context (text snapshot),
-checked_out_at, checked_in_at (nullable = still out). Lightweight history
-answering "who had this and when." Not forensic audit quality — just enough
-to find out who last had the broken multimeter.
-
-**StockAdjustment** *(evolution of AssetTransaction)* — id, thing_id, delta,
-quantity_after, user_id, note, created_at. Kept for exact-mode stock items
-only. Direct quantity mutation (no log) for fuzzy-mode items.
-
-**Category** — unchanged from existing Phase 2. Any authenticated user can
-manage categories.
-
-**AuditLog** — unchanged from existing Phase 2. Admin/superuser only.
-Records who created/updated/deleted entity records. Orthogonal to the
-item-level checkout/stock history.
-
-### Location model
-
-No special "top-level location" vs "sub-location" distinction. All locations
-are just `Thing` rows with `mobility = fixed` and a `parent_id`. Arbitrary
-depth — rooms contain shelves contain toolboxes contain drawers, all as
-sibling rows with parent-child links.
-
-**Key property:** moving a container (e.g. toolbox 3 moves from shelf 4 to
-under the workbench) means updating only one row (`toolbox3.parent_id`).
-All items homed inside it automatically reflect the new location because
-they reference the toolbox row, not the shelf row. No cascading updates.
-
-**Privacy is dropped entirely.** All locations and items are visible to all
-authenticated users. No `is_private` field, no cascade logic, no opaque 404s.
-
-**Responsible team cascades** from the nearest ancestor with one set. Any
-node can override it. Resolved by walking the ancestor chain at read time —
-never cached or denormalised. At Bitza's scale (a few dozen locations) this
-is trivially fast.
-
-### Workshop manager
-
-Resolved as just another team. Create a "Workshop" team (or "Workshop
-Manager" team) with the relevant people as members. Items with no
-`responsible_team_id` are considered to fall under whoever manages the
-workshop team. No special boolean flag, no special entity. The CLI and admin
-UI can label this appropriately.
-
-### Scan interactions
-
-Both locations and items have `scan_tag`. A scan resolves to a single
-`GET /things/by-tag/{scan_tag}` endpoint returning the thing, its direct
-children (if it's a location), and its current state (checked out / at home
-/ stock level). The Angular UI decides what to show based on `mobility` and
-whether the item is currently checked out.
-
-Common flows:
-- **Scan a location** → see what's directly there; option to drill into children
-- **Scan a mobile item** → see if it's available or with someone; one-tap
-  checkout ("I have this") or return ("returning to home")
-- **"I found this"** → scan item → return to home → clears current holder
+Stage 2 was a full rebuild, not an incremental migration — there was no
+production data, so the old location/asset tables and endpoints were
+deleted outright rather than migrated. See `MIGRATION_NOTES.md` (backend
+root) if anything about the old shape ever needs to be dug up from history.
 
 ---
 
-## What's still open / not yet decided
+## Repo structure (as of end of Stage 2)
 
-- **Multiple team memberships simultaneously** — parked, not decided. Current
-  design assumes one active team per user. Revisit if the club deployment
-  needs it.
-- **QR code generation** — `tag_source = generated` implies the backend can
-  generate a printable QR code label. Implementation not yet designed (format,
-  print workflow, label template, etc.).
-- **Low stock alerts** — `low_stock_threshold` is in the schema but no
-  notification mechanism has been designed.
-- **The Angular frontend** — not started. See `bitza_project_context.md`
-  for the API contract details that the frontend will consume.
-
----
-
-## The migration plan (not yet executed)
-
-Phase 2 is a clean rebuild, not an incremental migration, because:
-- No real production data exists yet (the superuser and a handful of test
-  records at most)
-- The schema change is fundamental (two tables → one unified table)
-- The existing Phase 2 migration (`0002_assets.py`) can simply be replaced
-
-Plan:
-1. Delete all existing Phase 2 Python files (models, schemas, repos,
-   services, endpoints)
-2. Write new Phase 2 files implementing the Thing/Team/etc. model above
-3. Replace `alembic/versions/0002_assets.py` with a new migration for the
-   new schema
-4. Update `alembic/env.py` and `tests/conftest.py` to import new models
-5. Update `app/api/v1/router.py` to mount new endpoints
-6. Write new tests for Phase 2
-
-**Phase 1 (auth/users) is entirely untouched by all of this.**
+```
+bitza/
+├── README.md
+├── bitza_project_context.md        ← full design doc, API contract, read this next
+├── bitza_context_restoration.md     ← this file
+├── backend/
+│   ├── AI_instructions.md          ← general FastAPI/SQLAlchemy/uv conventions used throughout
+│   ├── MIGRATION_NOTES.md          ← what got deleted/replaced during the Stage 2 rebuild
+│   ├── app/
+│   │   ├── models/      team.py, bitza.py, category.py, audit.py, user.py, token.py, base.py
+│   │   ├── schemas/     team.py, bitza.py, category.py, audit.py, user.py, auth.py
+│   │   ├── repositories/  one per model, thin DB access only
+│   │   ├── services/    team_service.py, bitza_service.py (also owns categories + audit reads),
+│   │   │                auth_service.py, user_service.py
+│   │   ├── api/v1/endpoints/  teams.py, bitzas.py (also owns /categories), audit.py, auth.py, users.py
+│   │   └── core/        config.py, security.py, exceptions.py, dependencies.py
+│   ├── alembic/versions/  0001_initial.py (users/tokens), 0002_bitzas.py (everything else)
+│   └── tests/  test_auth.py, test_users.py, test_cli.py, test_repositories.py (all Phase 1,
+│                unchanged), test_teams.py, test_bitzas.py (Stage 2, new)
+└── frontend/                        ← does not exist yet — Stage 3 starts here
+```
 
 ---
 
-## Key files to upload to a new chat
+## The API surface, condensed
 
-In order of importance:
-1. This document (bitza_context_restoration.md)
-2. `fastapi_sqlite_context_instructions.md` — general architectural rules
-3. `bitza_project_context.md` — API contract, Angular notes, image serving
-4. `assetmgmt.zip` — the current codebase (Phase 1 solid, Phase 2 to be replaced)
+Full detail (request/response shapes, validation rules, permission model,
+the design rationale behind each choice) is in `bitza_project_context.md`.
+This is just enough to orient a frontend build without re-reading the
+whole thing up front:
+
+- **Auth** — `POST /api/v1/auth/{login,refresh,logout}`, dual JWT
+  (15 min access / 30 day refresh, rotational), single `identifier` field
+  accepting email or username.
+- **Users** — `GET/PATCH /api/v1/users/me`, admin/superuser-gated
+  `/api/v1/users/` CRUD. Roles: `superuser` / `admin` / `user` — this is
+  the **only** place real access control exists in the whole app.
+- **Teams** — `/api/v1/teams/`, fully open (any authenticated user can
+  create/edit/delete a team and add/remove *any* user from *any* team —
+  deliberate trust model, not an oversight). `Team` doubles as "Project"
+  in the frontend's own display labelling; nothing in the API encodes
+  that distinction.
+- **Bitzas** — `/api/v1/bitzas/`, the unified location/container/item
+  tree (`kind`: `fixed` / `mobile` / `stock`). Also open to any
+  authenticated user for create/edit/move/retire/checkout/stock, **except
+  hard delete**, which is admin/superuser only. Key sub-resources:
+  `/retire`, `/reactivate`, `/reassign-team` (cascade sweep), `/checkout`,
+  `/checkin`, `/checkouts`, `/stock-adjustments`, `/images`.
+- **Categories** — `/api/v1/categories/`, unchanged simple CRUD, lives in
+  the same router file as bitzas.
+- **Audit log** — `/api/v1/audit/`, admin/superuser only — the one read
+  endpoint in the whole app that's permission-gated.
+
+**There is no privacy/visibility model anywhere.** Every bitza, team, and
+location is visible to every authenticated user. This was deliberately
+removed during Stage 2 design — see `bitza_project_context.md` if this
+looks surprising.
 
 ---
 
-## First task for the new chat
+## Frontend-relevant decisions already made (don't re-litigate these)
 
-Implement the new Phase 2 schema as described above. Suggested approach:
+- **Team vs Project is a pure display-label config**, decided at the
+  Angular level (env file or runtime setting — exact mechanism not yet
+  decided, see "open questions" below). The API is always `Team`.
+- **Token refresh**: interceptor-based is the stated preference (not yet
+  built) — transparent 401 → refresh → retry, redirect to login only if
+  refresh itself fails.
+- **Image fetching requires `HttpClient` with `responseType: 'blob'`** —
+  plain `<img src="...">` will not send the Authorization header against
+  `GET /api/v1/bitzas/{id}/images/{image_id}`.
+- **Reassign-team's `cascade_scope` has no backend default** — the
+  frontend is expected to supply a sensible default based on the bitza's
+  `kind` (e.g. a cupboard defaults its scope picker to `none`, a toolbox
+  to `all_descendants`), but the API itself never infers one; see
+  `bitza_project_context.md` for why.
+- **Direct-children-only reads**: `GET /bitzas/?parent_id=X` never
+  recurses. Any "show me everything nested here" UI has to drive that
+  itself with repeated calls — this is deliberate, not a limitation to
+  work around on the backend.
 
-Start by confirming the full file list of what needs to be created and what
-needs to be deleted before writing any code, to avoid confusion between old
-and new Phase 2 files coexisting in the working copy.
+## Open questions for Stage 3 (frontend) — not yet decided
+
+- Session persistence (localStorage vs sessionStorage)
+- Where the Team/Project label toggle actually lives in the Angular build
+- Whether the frontend infers `cascade_scope` defaults automatically from
+  `kind`, or always asks the user explicitly
+- Component library / styling approach — nothing chosen yet
+- Whether to scaffold with the Angular CLI directly or via `ng new` with
+  specific options (routing, SCSS, standalone components, etc.) — no
+  decisions made, wide open
+
+## Deliberately deferred — do not build unless asked
+
+- **In-app barcode/serial scanner** for manufacturer/supplier codes that
+  can't be replaced with a Bitza-generated QR label. The *primary* scan
+  mechanism (a QR/NFC tag encoding `bitza.myclub.org.au/bitza/<id>/`)
+  needs no scanner at all — that's just a route + a rendered QR image and
+  should be built as part of normal Stage 3 work. The camera-based
+  fallback scanner is the deferred piece.
+- **Comp/trip packing lists** ("what needs to go to Melbourne this
+  year") — no backend support exists for this yet, by design.
+
+---
+
+## How to get further detail without re-deriving it
+
+- **Full domain model, every schema/endpoint shape, and the reasoning
+  behind each design decision** → `bitza_project_context.md`
+- **General FastAPI/SQLAlchemy/uv conventions this backend follows**
+  (layering rules, sync-vs-async policy, testing conventions, etc.) →
+  `backend/AI_instructions.md`
+- **What got deleted/replaced during the Stage 2 rebuild, if old history
+  ever needs digging up** → `backend/MIGRATION_NOTES.md`
