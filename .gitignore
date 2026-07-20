@@ -1,108 +1,17 @@
 # =============================================================================
-# bitza — top-level .gitignore
-# Covers: Python backend, Angular frontend, editors, OS artefacts.
-# A more specific backend/.gitignore also exists as a belt-and-braces backup.
+# bitza — root .gitignore
+#
+# General, cross-cutting rules only: editors, IDEs, OS artefacts, and
+# personal scratch conventions. Stack-specific rules live in
+# backend/.gitignore and frontend/bitza/.gitignore instead — git applies
+# all applicable .gitignore files cumulatively as you go down the tree, so
+# nothing in those files needs to be repeated here, and nothing general
+# here needs to be repeated there.
 # =============================================================================
 
 
 # -----------------------------------------------------------------------------
-# Python
-# -----------------------------------------------------------------------------
-__pycache__/
-*.py[cod]          # compiled (.pyc), optimised (.pyo), dynamic (.pyd)
-*.pyd
-.Python
-*.egg-info/
-.eggs/
-*.egg
-wheels/
-
-
-# -----------------------------------------------------------------------------
-# Virtual environments
-# uv creates .venv/ — bare venv/ and env/ kept as safety nets.
-# -----------------------------------------------------------------------------
-.venv/
-venv/
-env/
-
-
-# -----------------------------------------------------------------------------
-# uv
-# uv.lock should be committed for applications — do not ignore it.
-# -----------------------------------------------------------------------------
-
-
-# -----------------------------------------------------------------------------
-# Environment files — never commit real secrets
-# .env.dev is generally safe to commit if it contains no real secrets.
-# Update: now using .env.*.template in the repo
-# but .env.test is only ever used locally in memory so can be kept in the repo
-# -----------------------------------------------------------------------------
-.env
-.env.dev
-.env.prod
-.env.uat
-
-
-# -----------------------------------------------------------------------------
-# SQLite databases
-# -----------------------------------------------------------------------------
-*.db
-*.db-shm
-*.db-wal
-data/
-
-
-# -----------------------------------------------------------------------------
-# Testing and coverage
-# -----------------------------------------------------------------------------
-.pytest_cache/
-.coverage
-coverage.xml
-htmlcov/
-
-
-# -----------------------------------------------------------------------------
-# Build artefacts
-# Applies to both Python (dist/, build/) and Angular (dist/, out-tsc/).
-# -----------------------------------------------------------------------------
-dist/
-build/
-out-tsc/
-tmp/
-coverage/
-
-
-# -----------------------------------------------------------------------------
-# Angular / frontend
-# -----------------------------------------------------------------------------
-e2e/test-output/
-.angular/
-.angular-cli.json
-.ng/
-*.tsbuildinfo
-
-
-# -----------------------------------------------------------------------------
-# Node
-# -----------------------------------------------------------------------------
-node_modules/
-package-lock.json
-yarn.lock
-
-
-# -----------------------------------------------------------------------------
-# Logs
-# -----------------------------------------------------------------------------
-*.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-
-
-# -----------------------------------------------------------------------------
-# Vim / Neovim
+# Editors — Vim / Neovim
 # -----------------------------------------------------------------------------
 *.swp          # swap file (active edit session)
 *.swo          # swap overflow
@@ -114,10 +23,28 @@ tags           # ctags / cscope tag index
 
 
 # -----------------------------------------------------------------------------
-# IDE
+# Editors — VS Code
+# Ignore personal editor state, but let team-shared config through.
 # -----------------------------------------------------------------------------
-.vscode/
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+!.vscode/mcp.json
+.history/*
+
+
+# -----------------------------------------------------------------------------
+# Other IDEs
+# -----------------------------------------------------------------------------
 .idea/
+.project
+.classpath
+.c9/
+*.launch
+.settings/
+*.sublime-workspace
 
 
 # -----------------------------------------------------------------------------
@@ -128,10 +55,17 @@ Thumbs.db
 
 
 # -----------------------------------------------------------------------------
-# Temporary / scratch files — clear this section out regularly
+# Generic logs / scratch space
+# Language-specific log patterns (npm-debug.log*, etc.) live in the
+# relevant stack's own .gitignore instead.
 # -----------------------------------------------------------------------------
-old_logging.py
-logtest.py
+*.log
+tmp/
+
+
+# -----------------------------------------------------------------------------
+# Personal scratch — clear this section out regularly
+# -----------------------------------------------------------------------------
 
 # stuff I download from claude
 claude/

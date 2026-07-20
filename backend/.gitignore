@@ -1,0 +1,93 @@
+# =============================================================================
+# bitza — backend/.gitignore
+#
+# Python (FastAPI + SQLAlchemy + uv) specific rules only. Cross-cutting
+# rules (editors, IDEs, OS artefacts) live in the root .gitignore and
+# already apply here too — no need to repeat them.
+# =============================================================================
+
+
+# -----------------------------------------------------------------------------
+# Python
+# -----------------------------------------------------------------------------
+__pycache__/
+*.py[cod]          # compiled (.pyc), optimised (.pyo), dynamic (.pyd)
+*.pyd
+.Python
+*.egg-info/
+.eggs/
+*.egg
+wheels/
+
+
+# -----------------------------------------------------------------------------
+# Virtual environments
+# uv creates .venv/ — bare venv/ and env/ kept as safety nets.
+# -----------------------------------------------------------------------------
+.venv/
+venv/
+env/
+
+
+# -----------------------------------------------------------------------------
+# uv
+# uv.lock should be committed for applications — do not ignore it.
+# -----------------------------------------------------------------------------
+
+
+# -----------------------------------------------------------------------------
+# Ruff / mypy
+# Both are real dev dependencies (see pyproject.toml) and both leave a
+# cache directory in backend/ the first time they run.
+# -----------------------------------------------------------------------------
+.ruff_cache/
+.mypy_cache/
+
+
+# -----------------------------------------------------------------------------
+# Environment files — never commit real secrets
+# .env.test is deliberately NOT listed here — it's only ever used locally
+# in memory for the test suite, so it's safe (and intended) to keep in git.
+# The .env.*.template files are template files, not real config, and are
+# safe to commit — only the real per-environment files below are ignored.
+# -----------------------------------------------------------------------------
+.env
+.env.dev
+.env.prod
+.env.uat
+
+
+# -----------------------------------------------------------------------------
+# SQLite databases
+# `data/*` (not `data/`) so the negation below actually works — git won't
+# recurse into a directory that's ignored outright, so a bare `data/`
+# would silently defeat the `!data/.gitkeep` line.
+# -----------------------------------------------------------------------------
+*.db
+*.db-shm
+*.db-wal
+data/*
+!data/.gitkeep
+
+
+# -----------------------------------------------------------------------------
+# Testing and coverage
+# -----------------------------------------------------------------------------
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+
+# -----------------------------------------------------------------------------
+# Build artefacts
+# -----------------------------------------------------------------------------
+dist/
+build/
+
+
+# -----------------------------------------------------------------------------
+# Personal scratch — clear this section out regularly
+# -----------------------------------------------------------------------------
+old_logging.py
+logtest.py

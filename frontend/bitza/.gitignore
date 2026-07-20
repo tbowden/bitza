@@ -1,44 +1,52 @@
-# See https://docs.github.com/get-started/getting-started-with-git/ignoring-files for more about ignoring files.
+# =============================================================================
+# bitza — frontend/bitza/.gitignore
+#
+# Angular / Node specific rules only. Cross-cutting rules (editors, IDEs,
+# OS artefacts) live in the root .gitignore and already apply here too —
+# no need to repeat them. This file replaces the Angular-CLI-generated
+# .gitignore that used to live here; a few entries from that scaffold
+# (Bazel, Testem/Karma, the old `typings` tool, `connect.lock`) were
+# dropped as dead weight from tooling this project doesn't use.
+# =============================================================================
 
+
+# -----------------------------------------------------------------------------
 # Compiled output
+# -----------------------------------------------------------------------------
 /dist
-/tmp
 /out-tsc
-/bazel-out
+/tmp
 
+
+# -----------------------------------------------------------------------------
 # Node
+# package-lock.json and yarn.lock are intentionally NOT listed here.
+# This is an application, not a published library — the lockfile must be
+# committed so every install (yours, CI, a teammate's) resolves the exact
+# same dependency tree. Please don't re-add it without a specific reason.
+# -----------------------------------------------------------------------------
 /node_modules
-npm-debug.log
-yarn-error.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
 
-# IDEs and editors
-.idea/
-.project
-.classpath
-.c9/
-*.launch
-.settings/
-*.sublime-workspace
 
-# Visual Studio Code
-.vscode/*
-!.vscode/settings.json
-!.vscode/tasks.json
-!.vscode/launch.json
-!.vscode/extensions.json
-!.vscode/mcp.json
-.history/*
-
-# Miscellaneous
-/.angular/cache
-.sass-cache/
-/connect.lock
+# -----------------------------------------------------------------------------
+# Angular
+# -----------------------------------------------------------------------------
+/.angular/
+*.tsbuildinfo
 /coverage
-/libpeerconnection.log
-testem.log
-/typings
-__screenshots__/
+e2e/test-output/
 
-# System files
-.DS_Store
-Thumbs.db
+
+# -----------------------------------------------------------------------------
+# Sass
+# -----------------------------------------------------------------------------
+.sass-cache/
+
+
+# -----------------------------------------------------------------------------
+# Misc
+# -----------------------------------------------------------------------------
+__screenshots__/
