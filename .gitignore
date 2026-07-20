@@ -26,13 +26,13 @@ tags           # ctags / cscope tag index
 # Editors — VS Code
 # Ignore personal editor state, but let team-shared config through.
 # -----------------------------------------------------------------------------
-.vscode/*
-!.vscode/settings.json
-!.vscode/tasks.json
-!.vscode/launch.json
-!.vscode/extensions.json
-!.vscode/mcp.json
-.history/*
+**/.vscode/*
+!**/.vscode/settings.json
+!**/.vscode/tasks.json
+!**/.vscode/launch.json
+!**/.vscode/extensions.json
+!**/.vscode/mcp.json
+**/.history/*
 
 
 # -----------------------------------------------------------------------------
