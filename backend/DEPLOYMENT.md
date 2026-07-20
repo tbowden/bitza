@@ -37,7 +37,7 @@ Docker scenarios additionally require:
 
 ```bash
 git clone <repository-url>
-cd bitza
+cd bitza/backend
 ```
 
 ### 2. Install dependencies
