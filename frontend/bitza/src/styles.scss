@@ -1,1 +1,86 @@
-/* You can add global styles to this file, and also import other style files */
+@use '@angular/material' as mat;
+
+// ---------------------------------------------------------------------------
+// Bitza design tokens
+//
+// Grounded in the subject: this is a workshop/club inventory tracker, so the
+// palette leans on technical signage colours (a steady workshop blue, an
+// amber accent borrowed from tool-crib hazard marking) rather than a
+// generic brand palette. Identifiers, codes, and timestamps use a monospace
+// face throughout to read like the printed asset tags the app itself
+// generates (see the QR-label feature in bitza_project_context.md) -
+// that pairing (Inter for UI, IBM Plex Mono for anything that identifies a
+// specific physical thing) is the one signature carried through every screen.
+// ---------------------------------------------------------------------------
+
+html {
+  @include mat.theme(
+    (
+      color: (
+        theme-type: light,
+        primary: mat.$blue-palette,
+        tertiary: mat.$orange-palette,
+      ),
+      typography: (
+        plain-family: 'Inter',
+        brand-family: 'Inter',
+        bold-weight: 600,
+        medium-weight: 500,
+        regular-weight: 400,
+      ),
+      density: 0,
+    )
+  );
+
+  // App-wide custom properties layered on top of the Material system
+  // variables, used for the identifier/mono treatment described above.
+  --bitza-font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+  --bitza-nav-width: 264px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  font-family: 'Inter', var(--mat-sys-body-medium-font, sans-serif);
+  color: var(--mat-sys-on-surface);
+  background: var(--mat-sys-surface);
+}
+
+// Utility class for anything that identifies a specific physical bitza:
+// IDs, category codes, checkout timestamps. Keeps a consistent "asset tag"
+// feel wherever it appears rather than reading as plain body text.
+.bitza-tag {
+  font-family: var(--bitza-font-mono);
+  font-size: 0.8125rem;
+  letter-spacing: 0.02em;
+  padding: 0.125rem 0.5rem;
+  border-radius: 4px;
+  background: var(--mat-sys-surface-container-high);
+  color: var(--mat-sys-on-surface-variant);
+}
+
+// Visible keyboard focus everywhere, independent of Material's own
+// focus styling, so custom elements never end up with an invisible
+// focus outline.
+:focus-visible {
+  outline: 2px solid var(--mat-sys-primary);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
