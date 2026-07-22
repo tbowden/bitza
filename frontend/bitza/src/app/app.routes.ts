@@ -17,14 +17,35 @@ export const routes: Routes = [
       {
         path: 'bitzas',
         loadComponent: () =>
-          import('./features/bitzas/bitzas-placeholder').then((m) => m.BitzasPlaceholder),
+          import('./features/bitzas/bitza-browser/bitza-browser').then((m) => m.BitzaBrowser),
         title: 'Bitzas',
+      },
+      {
+        path: 'bitzas/:id',
+        loadComponent: () =>
+          import('./features/bitzas/bitza-browser/bitza-browser').then((m) => m.BitzaBrowser),
+        title: 'Bitza',
+      },
+      {
+        // Canonical URL baked into printed QR/NFC tags is singular
+        // ("/bitza/<id>/", per bitza_project_context.md's "Scanning"
+        // section) and must keep working even if the in-app browsing
+        // route is ever renamed — hence a plain redirect rather than
+        // pointing both paths at the same component.
+        path: 'bitza/:id',
+        redirectTo: 'bitzas/:id',
       },
       {
         path: 'teams',
         loadComponent: () =>
-          import('./features/teams/teams-placeholder').then((m) => m.TeamsPlaceholder),
+          import('./features/teams/teams-list/teams-list').then((m) => m.TeamsList),
         title: 'Teams',
+      },
+      {
+        path: 'teams/:id',
+        loadComponent: () =>
+          import('./features/teams/team-detail/team-detail').then((m) => m.TeamDetail),
+        title: 'Team detail',
       },
       {
         path: 'users',
