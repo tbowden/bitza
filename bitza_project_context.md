@@ -521,16 +521,19 @@ should be additive rather than a refactor:
 
 ---
 
-## Known decisions still to be made (frontend)
+## Frontend status
 
-- **Token refresh strategy** — interceptor-based (transparent to the rest of
-  the app) vs explicit refresh calls. Interceptor is strongly recommended.
-- **Session persistence** — does the app stay logged in across browser
-  restarts? (Yes if using localStorage, no if sessionStorage.)
-- **Team vs Project label config** — where this toggle lives in the Angular
-  build (environment file vs runtime setting) hasn't been decided.
-- **Cascade-scope default heuristics** — whether the frontend infers a
-  sensible default scope from a bitza's `kind` (see "Reassigning
-  responsible team" above) or always asks explicitly.
-- **Offline behaviour** — out of scope for now; SQLite backend has no sync
-  capability.
+Stage 3 (the Angular frontend) has been built out across five milestones
+— Foundation, Teams, Bitzas core, Bitza actions, and Admin & polish — and
+the decisions that used to be listed here as open (token refresh strategy,
+session persistence, Team vs Project label config, cascade-scope
+defaults) have all been made. **See `bitza_frontend_context.md` for the
+full frontend architecture, what's built, and — importantly — a list of
+backend endpoint shapes the frontend had to assume rather than confirm
+(admin user CRUD, audit log filters, and whether `GET /users/` is
+actually readable by any authenticated user or strictly admin-gated as
+written above).** That last one in particular is worth resolving against
+this document's own permission table before it causes a real mismatch.
+
+Offline behaviour remains out of scope — the SQLite backend has no sync
+capability.
