@@ -1,0 +1,74 @@
+<h2 mat-dialog-title>{{ isEdit ? 'Edit user' : 'New user' }}</h2>
+
+<form (submit)="onSubmit($event)" novalidate>
+  <mat-dialog-content>
+    <mat-form-field appearance="outline" class="full-width">
+      <mat-label>Email</mat-label>
+      <input matInput type="email" [formField]="userForm.email" />
+      @if (userForm.email().touched() && userForm.email().invalid()) {
+        <mat-error>Email is required.</mat-error>
+      }
+    </mat-form-field>
+
+    <mat-form-field appearance="outline" class="full-width">
+      <mat-label>Username</mat-label>
+      <input matInput type="text" [formField]="userForm.username" />
+      @if (userForm.username().touched() && userForm.username().invalid()) {
+        <mat-error>Username is required.</mat-error>
+      }
+    </mat-form-field>
+
+    @if (!isEdit) {
+      <mat-form-field appearance="outline" class="full-width">
+        <mat-label>Password</mat-label>
+        <input
+          matInput
+          type="password"
+          autocomplete="new-password"
+          [formField]="userForm.password"
+        />
+        @if (userForm.password().touched() && userForm.password().invalid()) {
+          <mat-error>Password is required.</mat-error>
+        }
+      </mat-form-field>
+    }
+
+    @if (!isEdit && availableRoles().length > 1) {
+      <mat-form-field appearance="outline" class="full-width">
+        <mat-label>Role</mat-label>
+        <mat-select [formField]="userForm.role">
+          @for (role of availableRoles(); track role) {
+            <mat-option [value]="role">{{ role }}</mat-option>
+          }
+        </mat-select>
+      </mat-form-field>
+    }
+
+    @if (isEdit && canChangeRole()) {
+      <mat-form-field appearance="outline" class="full-width">
+        <mat-label>Role</mat-label>
+        <mat-select [formField]="userForm.role">
+          <mat-option value="user">user</mat-option>
+          <mat-option value="admin">admin</mat-option>
+          <mat-option value="superuser">superuser</mat-option>
+        </mat-select>
+      </mat-form-field>
+    }
+
+    @if (isEdit && canToggleSuspension()) {
+      <mat-slide-toggle
+        [checked]="model().is_suspended"
+        (change)="model.update((m) => ({ ...m, is_suspended: $event.checked }))"
+      >
+        Suspended
+      </mat-slide-toggle>
+    }
+  </mat-dialog-content>
+
+  <mat-dialog-actions align="end">
+    <button mat-button type="button" (click)="dialogRef.close()">Cancel</button>
+    <button mat-flat-button color="primary" type="submit">
+      {{ isEdit ? 'Save' : 'Create' }}
+    </button>
+  </mat-dialog-actions>
+</form>

@@ -20,3 +20,30 @@ export interface UserUpdate {
   username?: string;
   password?: string;
 }
+
+/**
+ * Admin-only user management. The docs confirm `/api/v1/users/` CRUD is
+ * admin/superuser-gated and describe the permission *table* (who can see
+ * role controls, create-admin, suspend/delete) but not the exact request
+ * shapes for create/suspend — these are the natural REST shapes given
+ * everything else in the app, flagged here in case the backend differs.
+ */
+export interface UserCreate {
+  email: string;
+  username: string;
+  password: string;
+  role: UserRole;
+}
+
+/**
+ * Modelled as a plain PATCH including `is_suspended`, matching the rest
+ * of the app's style (e.g. fuzzy_state) rather than a dedicated
+ * suspend/unsuspend endpoint — flagged as an assumption, not confirmed
+ * against a documented endpoint shape.
+ */
+export interface AdminUserUpdate {
+  email?: string;
+  username?: string;
+  role?: UserRole;
+  is_suspended?: boolean;
+}

@@ -1,0 +1,39 @@
+.page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+}
+
+.users-table {
+  width: 100%;
+}
+
+.user-email {
+  display: block;
+  font-size: 0.8125rem;
+  color: var(--mat-sys-on-surface-variant);
+}
+
+.status-tag {
+  font-size: 0.8125rem;
+  padding: 0.125rem 0.5rem;
+  border-radius: 4px;
+  background: var(--mat-sys-tertiary-container);
+  color: var(--mat-sys-on-tertiary-container);
+}
+
+.suspended-tag {
+  background: var(--mat-sys-error-container);
+  color: var(--mat-sys-on-error-container);
+}
+
+.loading-row {
+  display: flex;
+  justify-content: center;
+  padding: 2rem 0;
+}
+
+.error-text {
+  color: var(--mat-sys-error);
+}

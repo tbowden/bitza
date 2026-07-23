@@ -2,7 +2,7 @@ import { HttpClient } from '@angular/common/http';
 import { Service, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import { environment } from '../../../environments/environment';
-import { User, UserUpdate } from '../models';
+import { AdminUserUpdate, User, UserCreate, UserUpdate } from '../models';
 
 /**
  * Covers /users/me (open to any authenticated user) and the /users/
@@ -32,5 +32,19 @@ export class UserService {
 
   get(id: string): Observable<User> {
     return this.http.get<User>(`${this.baseUrl}/${id}`);
+  }
+
+  /** Admin/superuser only — see UserCreate's doc comment for the shape caveat. */
+  create(user: UserCreate): Observable<User> {
+    return this.http.post<User>(`${this.baseUrl}/`, user);
+  }
+
+  /** Admin/superuser only. The backend is the source of truth on who may edit whom. */
+  adminUpdate(id: string, update: AdminUserUpdate): Observable<User> {
+    return this.http.patch<User>(`${this.baseUrl}/${id}`, update);
+  }
+
+  delete(id: string): Observable<void> {
+    return this.http.delete<void>(`${this.baseUrl}/${id}`);
   }
 }

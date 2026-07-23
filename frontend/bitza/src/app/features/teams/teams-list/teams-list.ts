@@ -51,12 +51,17 @@ import { TeamFormDialog, TeamFormResult } from '../team-form-dialog/team-form-di
         @for (team of visibleTeams(); track team.id) {
           <mat-card
             class="team-card"
+            role="button"
             tabindex="0"
+            [attr.aria-label]="'Open ' + team.name"
             (click)="openTeam(team.id)"
             (keydown.enter)="openTeam(team.id)"
+            (keydown.space)="openTeam(team.id); $event.preventDefault()"
           >
             <mat-card-header>
-              <mat-card-title>{{ team.name }}</mat-card-title>
+              <mat-card-title
+                ><h2>{{ team.name }}</h2></mat-card-title
+              >
             </mat-card-header>
             @if (team.description) {
               <mat-card-content>{{ team.description }}</mat-card-content>
@@ -67,6 +72,11 @@ import { TeamFormDialog, TeamFormResult } from '../team-form-dialog/team-form-di
     }
   `,
   styles: `
+    mat-card-title h2 {
+      margin: 0;
+      font: inherit;
+    }
+
     .page-header {
       display: flex;
       align-items: center;

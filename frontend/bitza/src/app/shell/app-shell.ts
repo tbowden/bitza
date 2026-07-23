@@ -28,6 +28,7 @@ import { AuthService } from '../core/services/auth.service';
     MatToolbarModule,
   ],
   template: `
+    <a href="#main-content" class="skip-link">Skip to main content</a>
     <mat-sidenav-container class="shell-container">
       <mat-sidenav
         #sidenav
@@ -114,13 +115,28 @@ import { AuthService } from '../core/services/auth.service';
           }
         </mat-toolbar>
 
-        <main class="shell-content">
+        <main id="main-content" class="shell-content" tabindex="-1">
           <router-outlet></router-outlet>
         </main>
       </mat-sidenav-content>
     </mat-sidenav-container>
   `,
   styles: `
+    .skip-link {
+      position: absolute;
+      left: -9999px;
+      top: 0;
+      z-index: 100;
+      background: var(--mat-sys-primary);
+      color: var(--mat-sys-on-primary);
+      padding: 0.75rem 1rem;
+      border-radius: 0 0 4px 0;
+    }
+
+    .skip-link:focus {
+      left: 0;
+    }
+
     .shell-container {
       height: 100vh;
     }

@@ -41,6 +41,9 @@ import {
   ReassignTeamResult,
 } from '../reassign-team-dialog/reassign-team-dialog';
 import { RetireDialog, RetireDialogResult } from '../retire-dialog/retire-dialog';
+import { CheckoutSection } from '../checkout-section/checkout-section';
+import { StockSection } from '../stock-section/stock-section';
+import { ImageGallery } from '../image-gallery/image-gallery';
 
 @Component({
   selector: 'app-bitza-browser',
@@ -55,6 +58,9 @@ import { RetireDialog, RetireDialogResult } from '../retire-dialog/retire-dialog
     MatProgressSpinnerModule,
     MatSelectModule,
     MatTableModule,
+    CheckoutSection,
+    StockSection,
+    ImageGallery,
   ],
   template: `
     <nav class="breadcrumb" aria-label="Bitza location">
@@ -68,10 +74,15 @@ import { RetireDialog, RetireDialogResult } from '../retire-dialog/retire-dialog
     @if (loadError()) {
       <p class="error-text" role="alert">Couldn't load this bitza.</p>
     } @else {
+      @if (!currentId()) {
+        <h1>Bitzas</h1>
+      }
       @if (currentId() && currentBitza(); as bitza) {
         <mat-card class="bitza-card">
           <mat-card-header>
-            <mat-card-title>{{ bitza.name }}</mat-card-title>
+            <mat-card-title
+              ><h1>{{ bitza.name }}</h1></mat-card-title
+            >
             <mat-card-subtitle>
               <span class="bitza-tag">{{ bitza.kind }}</span>
               @if (bitza.status === 'retired') {
@@ -111,6 +122,26 @@ import { RetireDialog, RetireDialogResult } from '../retire-dialog/retire-dialog
                 </button>
               </div>
             }
+
+            @if (bitza.kind === 'mobile') {
+              <div class="action-section">
+                <app-checkout-section [bitzaId]="bitza.id" />
+              </div>
+            }
+
+            @if (bitza.kind === 'stock' && bitza.stock_mode === 'exact') {
+              <div class="action-section">
+                <app-stock-section
+                  [bitzaId]="bitza.id"
+                  [currentQuantity]="bitza.quantity ?? 0"
+                  (adjusted)="onStockAdjusted()"
+                />
+              </div>
+            }
+
+            <div class="action-section">
+              <app-image-gallery [bitzaId]="bitza.id" [bitzaName]="bitza.name" />
+            </div>
           </mat-card-content>
 
           <mat-card-actions>
@@ -240,6 +271,11 @@ import { RetireDialog, RetireDialogResult } from '../retire-dialog/retire-dialog
     }
   `,
   styles: `
+    mat-card-title h1 {
+      margin: 0;
+      font: inherit;
+    }
+
     .breadcrumb {
       margin-bottom: 1rem;
       font-size: 0.9rem;
@@ -271,6 +307,12 @@ import { RetireDialog, RetireDialogResult } from '../retire-dialog/retire-dialog
       align-items: flex-start;
       gap: 0.5rem;
       margin-top: 1rem;
+    }
+
+    .action-section {
+      margin-top: 1.25rem;
+      padding-top: 1rem;
+      border-top: 1px solid var(--mat-sys-outline-variant);
     }
 
     .filters-row {
@@ -550,6 +592,11 @@ export class BitzaBrowser {
   protected onManageCategories(): void {
     const dialogRef = this.dialog.open(CategoryManagerDialog, { width: '480px' });
     dialogRef.afterClosed().subscribe(() => this.categoriesReload.update((n) => n + 1));
+  }
+
+  /** Stock adjustments change bitza.quantity, which the detail card and children table both show. */
+  protected onStockAdjusted(): void {
+    this.reload.update((n) => n + 1);
   }
 
   protected onPrintLabel(): void {

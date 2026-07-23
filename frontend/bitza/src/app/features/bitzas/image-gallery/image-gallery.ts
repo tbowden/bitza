@@ -43,9 +43,18 @@ interface ImageUrl {
       <p>No images yet.</p>
     } @else {
       <div class="image-grid">
-        @for (image of imageUrls(); track image.id) {
+        @for (image of imageUrls(); track image.id; let i = $index) {
           <div class="image-tile">
-            <img [src]="image.url" alt="" width="120" height="120" />
+            <img
+              [src]="image.url"
+              [alt]="
+                image.isPrimary
+                  ? 'Cover photo of ' + bitzaName()
+                  : 'Photo ' + (i + 1) + ' of ' + bitzaName()
+              "
+              width="120"
+              height="120"
+            />
             @if (image.isPrimary) {
               <span class="primary-badge">Cover</span>
             }
@@ -137,6 +146,7 @@ interface ImageUrl {
 })
 export class ImageGallery {
   readonly bitzaId = input.required<string>();
+  readonly bitzaName = input<string>('this bitza');
 
   private readonly imageService = inject(ImageService);
   private readonly dialog = inject(MatDialog);

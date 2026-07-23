@@ -51,14 +51,13 @@ export const routes: Routes = [
         path: 'users',
         canActivate: [adminGuard],
         loadComponent: () =>
-          import('./features/users/users-placeholder').then((m) => m.UsersPlaceholder),
+          import('./features/users/users-list/users-list').then((m) => m.UsersList),
         title: 'Users',
       },
       {
         path: 'audit',
         canActivate: [adminGuard],
-        loadComponent: () =>
-          import('./features/audit/audit-placeholder').then((m) => m.AuditPlaceholder),
+        loadComponent: () => import('./features/audit/audit-log/audit-log').then((m) => m.AuditLog),
         title: 'Audit log',
       },
     ],

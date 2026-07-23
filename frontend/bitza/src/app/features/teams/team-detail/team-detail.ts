@@ -96,6 +96,11 @@ import { TeamFormDialog, TeamFormResult } from '../team-form-dialog/team-form-di
                 mat-icon-button
                 type="button"
                 [attr.aria-pressed]="member.is_primary"
+                [attr.aria-label]="
+                  member.is_primary
+                    ? 'Unset ' + (member.username ?? 'this member') + ' as primary team'
+                    : 'Set ' + (member.username ?? 'this member') + ' as primary team'
+                "
                 [matTooltip]="
                   member.is_primary ? 'Primary team — click to unset' : 'Set as primary team'
                 "
