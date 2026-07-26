@@ -1,4 +1,4 @@
-import { Component, computed, effect, inject, signal } from '@angular/core';
+import { Component, computed, inject, signal } from '@angular/core';
 import { toObservable, toSignal } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { HttpErrorResponse } from '@angular/common/http';
@@ -14,7 +14,6 @@ import { MatSelectModule } from '@angular/material/select';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatTableModule } from '@angular/material/table';
 import { combineLatest, catchError, expand, map, of, switchMap, toArray } from 'rxjs';
-import { toDataURL } from 'qrcode';
 import { AppConfigService } from '../../../core/services/app-config.service';
 import { AuthService } from '../../../core/services/auth.service';
 import { BitzaService } from '../../../core/services/bitza.service';
@@ -46,6 +45,7 @@ import {
   MoveBitzaDialogData,
   MoveBitzaResult,
 } from '../move-bitza-dialog/move-bitza-dialog';
+import { BitzaLabelDialog, BitzaLabelDialogData } from '../bitza-label-dialog/bitza-label-dialog';
 import { CheckoutSection } from '../checkout-section/checkout-section';
 import { StockSection } from '../stock-section/stock-section';
 import { ImageGallery } from '../image-gallery/image-gallery';
@@ -125,16 +125,6 @@ import { ImageGallery } from '../image-gallery/image-gallery';
               </p>
             }
 
-            @if (qrDataUrl(); as qr) {
-              <div class="qr-block">
-                <img [src]="qr" alt="QR label for {{ bitza.name }}" width="140" height="140" />
-                <button mat-stroked-button type="button" (click)="onPrintLabel()">
-                  <mat-icon>print</mat-icon>
-                  Print label
-                </button>
-              </div>
-            }
-
             @if (bitza.kind === 'mobile') {
               <div class="action-section">
                 <app-checkout-section [bitzaId]="bitza.id" />
@@ -164,6 +154,10 @@ import { ImageGallery } from '../image-gallery/image-gallery';
             <button mat-button type="button" (click)="onEdit(bitza)">
               <mat-icon>edit</mat-icon>
               Edit
+            </button>
+            <button mat-button type="button" (click)="onViewLabel(bitza)">
+              <mat-icon>qr_code_2</mat-icon>
+              Label
             </button>
             <button mat-button type="button" (click)="onReassignTeam(bitza)">
               <mat-icon>swap_horiz</mat-icon>
@@ -318,14 +312,6 @@ import { ImageGallery } from '../image-gallery/image-gallery';
       margin-right: 0.5rem;
     }
 
-    .qr-block {
-      display: flex;
-      flex-direction: column;
-      align-items: flex-start;
-      gap: 0.5rem;
-      margin-top: 1rem;
-    }
-
     .action-section {
       margin-top: 1.25rem;
       padding-top: 1rem;
@@ -366,15 +352,6 @@ import { ImageGallery } from '../image-gallery/image-gallery';
 
     .error-text {
       color: var(--mat-sys-error);
-    }
-
-    @media print {
-      .breadcrumb,
-      .filters-row,
-      mat-card-actions,
-      .children-table {
-        display: none !important;
-      }
     }
   `,
 })
@@ -471,22 +448,6 @@ export class BitzaBrowser {
 
   protected readonly childrenLoading = computed(() => this.childrenResult() === undefined);
   protected readonly children = computed(() => this.childrenResult() ?? []);
-
-  protected readonly qrDataUrl = signal<string | null>(null);
-
-  constructor() {
-    effect(() => {
-      const bitza = this.currentBitza();
-      if (!bitza) {
-        this.qrDataUrl.set(null);
-        return;
-      }
-      const url = `${window.location.origin}/bitza/${bitza.id}/`;
-      toDataURL(url, { margin: 1, width: 220 })
-        .then((dataUrl) => this.qrDataUrl.set(dataUrl))
-        .catch(() => this.qrDataUrl.set(null));
-    });
-  }
 
   private buildAncestorChain(bitza: Bitza) {
     return of(bitza).pipe(
@@ -636,7 +597,8 @@ export class BitzaBrowser {
     this.reload.update((n) => n + 1);
   }
 
-  protected onPrintLabel(): void {
-    window.print();
+  protected onViewLabel(bitza: Bitza): void {
+    const data: BitzaLabelDialogData = { bitza };
+    this.dialog.open(BitzaLabelDialog, { width: '360px', data });
   }
 }
