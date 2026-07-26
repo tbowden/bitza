@@ -22,9 +22,10 @@ from app.models.base import Base
 from app.models.token import RefreshToken  # noqa: F401
 from app.models.team import Team, TeamMember  # noqa: F401
 from app.models.category import Category  # noqa: F401 — ensure table is registered
-from app.models.bitza import Bitza, BitzaImage, Checkout, StockLog  # noqa: F401
+from app.models.bitza import Bitza, BitzaImage, BitzaKind, Checkout, StockLog  # noqa: F401
 from app.models.audit import AuditLog  # noqa: F401
 from app.models.user import User, UserRole  # noqa: F401
+from app.models.system_config import SystemConfig  # noqa: F401
 from app.core.security import hash_password
 
 # ---------------------------------------------------------------------------
@@ -247,3 +248,33 @@ def default_team(db: Session) -> Team:
     db.add(team)
     db.flush()
     return team
+
+
+@pytest.fixture(autouse=True)
+def root_bitza(db: Session, default_team: Team) -> Bitza:
+    """
+    Every test gets a root bitza automatically. Ordinary bitza creation
+    now always requires a parent — the root is meant to be created
+    exactly once, via the CLI's create-root command, never through the
+    ordinary POST /bitzas/ endpoint (see BitzaCreate.parent_id,
+    BitzaService.create_root_bitza). Built directly via ORM, bypassing
+    create_root_bitza, matching how default_team above bypasses its own
+    service layer — there's no HTTP path that could create this for us
+    anyway. Autouse + conftest-level (rather than local to
+    test_bitzas.py) because test_teams.py also creates bitzas via the API
+    and needs one to exist too; harmless for test files that don't touch
+    bitzas at all (test_cli.py manages its own isolated DB entirely and
+    never requests this fixture; no other file asserts an exact global
+    count of bitzas/teams that an extra row here would upset).
+    """
+    root = Bitza(
+        name="Test Root",
+        kind=BitzaKind.fixed,
+        parent_id=None,
+        responsible_team_id=default_team.id,
+    )
+    db.add(root)
+    db.flush()
+    db.add(SystemConfig(root_bitza_id=root.id))
+    db.flush()
+    return root

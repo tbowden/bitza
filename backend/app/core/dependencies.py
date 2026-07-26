@@ -11,6 +11,7 @@ from app.repositories.bitza_repository import BitzaRepository
 from app.repositories.category_repository import CategoryRepository
 from app.repositories.checkout_repository import CheckoutRepository
 from app.repositories.stock_log_repository import StockLogRepository
+from app.repositories.system_config_repository import SystemConfigRepository
 from app.repositories.team_repository import TeamRepository
 from app.repositories.token_repository import TokenRepository
 from app.repositories.user_repository import UserRepository
@@ -66,6 +67,10 @@ def get_audit_repository(db: Session = Depends(get_db)) -> AuditRepository:
     return AuditRepository(db)
 
 
+def get_system_config_repository(db: Session = Depends(get_db)) -> SystemConfigRepository:
+    return SystemConfigRepository(db)
+
+
 # ---------------------------------------------------------------------------
 # Phase 1 — Service providers
 # ---------------------------------------------------------------------------
@@ -111,6 +116,7 @@ def get_bitza_service(
     stock_log_repo: StockLogRepository = Depends(get_stock_log_repository),
     image_repo: BitzaImageRepository = Depends(get_bitza_image_repository),
     audit_repo: AuditRepository = Depends(get_audit_repository),
+    system_config_repo: SystemConfigRepository = Depends(get_system_config_repository),
 ) -> BitzaService:
     return BitzaService(
         db=db,
@@ -122,6 +128,7 @@ def get_bitza_service(
         stock_log_repo=stock_log_repo,
         image_repo=image_repo,
         audit_repo=audit_repo,
+        system_config_repo=system_config_repo,
     )
 
 

@@ -70,7 +70,7 @@ class TestTeamCrud:
         assert resp.status_code == 204
 
     def test_delete_blocked_while_bitza_references_team(
-        self, client: TestClient, user_token: str
+        self, client: TestClient, user_token: str, root_bitza
     ) -> None:
         team = client.post(
             BASE + "/", json={"name": "In Use"}, headers=auth(user_token)
@@ -81,6 +81,7 @@ class TestTeamCrud:
                 "name": "Workshop Shelf",
                 "kind": "fixed",
                 "responsible_team_id": team["id"],
+                "parent_id": root_bitza.id,
             },
             headers=auth(user_token),
         )
@@ -133,7 +134,7 @@ class TestTeamMembership:
             BASE + "/", json={"name": "Team A"}, headers=auth(user_token)
         ).json()
         team_b = client.post(
-            BASE + "/", json={"name": "Workshop"}, headers=auth(user_token)
+            BASE + "/", json={"name": "Team B"}, headers=auth(user_token)
         ).json()
         client.post(
             f"{BASE}/{team_a['id']}/members",
@@ -148,7 +149,7 @@ class TestTeamMembership:
         resp = client.get(f"{BASE}/?user_id={normal_user.id}", headers=auth(user_token))
         assert resp.status_code == 200
         names = {t["name"] for t in resp.json()}
-        assert names == {"Team A", "Workshop"}
+        assert names == {"Team A", "Team B"}
 
     def test_setting_primary_unsets_other_primary(
         self, client: TestClient, user_token: str, normal_user: User

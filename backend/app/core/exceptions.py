@@ -80,3 +80,30 @@ class SuperuserExistsError(HTTPException):
             status_code=status.HTTP_409_CONFLICT,
             detail="A superuser already exists. Use the CLI to manage the superuser account.",
         )
+
+
+class RootBitzaExistsError(HTTPException):
+    """Attempted to create a second root bitza via the CLI."""
+
+    def __init__(self) -> None:
+        super().__init__(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="A root bitza already exists. There can only be one — see the CLI's "
+            "create-root command output for its details.",
+        )
+
+
+class RootBitzaProtectedError(HTTPException):
+    """
+    Attempted to delete, retire, or move the single root bitza. Unlike
+    every other permission floor in this app (which is role-based — "only
+    admins may do X"), this one is unconditional: it applies regardless of
+    who's asking, including a superuser. The root is a structural anchor,
+    not an ordinary record with elevated protection.
+    """
+
+    def __init__(self, detail: str = "The root bitza is protected and cannot be changed this way.") -> None:
+        super().__init__(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=detail,
+        )

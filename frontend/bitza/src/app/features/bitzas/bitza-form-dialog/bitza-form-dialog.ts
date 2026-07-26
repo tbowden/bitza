@@ -23,10 +23,14 @@ import {
 } from '../../../core/models';
 
 export interface BitzaFormDialogData {
-  /** Present when editing; absent when creating. */
+  /** Present when editing; absent (bitza) when creating. */
   bitza?: Bitza;
-  /** Creation context: which bitza this new one will live under (null = root). */
-  parentId?: string | null;
+  /**
+   * Which bitza the new one will live under. Always required for create —
+   * there is no "create at root" anymore; the root bitza is created once
+   * via the backend CLI, never through this dialog.
+   */
+  parentId?: string;
   /** Pre-filled from the parent's own team, per the documented frontend responsibility. */
   defaultTeamId?: string;
 }
@@ -273,10 +277,19 @@ export class BitzaFormDialog {
         return undefined;
       }
 
+      const parentId = this.data?.parentId;
+      if (!parentId) {
+        // Should be unreachable — every caller that opens this dialog in
+        // create mode must supply a parent now that root-level creation
+        // no longer exists as a UI path. Fail loudly rather than send an
+        // invalid request the backend will reject anyway.
+        throw new Error('BitzaFormDialog: parentId is required to create a bitza');
+      }
+
       const create: BitzaCreate = {
         name: value.name,
         kind: value.kind,
-        parent_id: this.data?.parentId ?? null,
+        parent_id: parentId,
         responsible_team_id: value.responsible_team_id,
         category_id: value.category_id || undefined,
         description: value.description || undefined,

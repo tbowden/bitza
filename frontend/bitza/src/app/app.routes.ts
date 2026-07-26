@@ -1,6 +1,7 @@
 import { Routes } from '@angular/router';
 import { authGuard } from './core/guards/auth.guard';
 import { adminGuard } from './core/guards/admin.guard';
+import { redirectToRootGuard } from './core/guards/redirect-to-root.guard';
 
 export const routes: Routes = [
   {
@@ -16,6 +17,7 @@ export const routes: Routes = [
       { path: '', redirectTo: 'bitzas', pathMatch: 'full' },
       {
         path: 'bitzas',
+        canActivate: [redirectToRootGuard],
         loadComponent: () =>
           import('./features/bitzas/bitza-browser/bitza-browser').then((m) => m.BitzaBrowser),
         title: 'Bitzas',

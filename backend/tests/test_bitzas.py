@@ -15,6 +15,7 @@ Covers:
 
 from fastapi.testclient import TestClient
 
+from app.models.bitza import Bitza
 from app.models.team import Team
 from app.models.user import User
 
@@ -22,6 +23,25 @@ BASE = "/api/v1/bitzas"
 BASE_TEAM = "/api/v1/teams"
 BASE_CAT = "/api/v1/categories"
 BASE_AUDIT = "/api/v1/audit"
+
+
+_root_id_cache: dict[int, str] = {}
+
+
+def _root_id(client, token) -> str:
+    """
+    Lazily resolve the current test's root bitza id via the ordinary
+    root_only=true listing (which, now that only one root can ever
+    exist, always returns exactly that one item). Cached per test client
+    instance so repeated helper calls within one test don't re-fetch.
+    """
+    key = id(client)
+    if key not in _root_id_cache:
+        resp = client.get(BASE + "/?root_only=true", headers=auth(token))
+        roots = resp.json()
+        assert roots, "No root bitza found — the root_bitza fixture should have created one"
+        _root_id_cache[key] = roots[0]["id"]
+    return _root_id_cache[key]
 
 
 def auth(token: str) -> dict:
@@ -35,7 +55,7 @@ def make_fixed(client, token, team_id, name="Workshop", parent_id=None):
             "name": name,
             "kind": "fixed",
             "responsible_team_id": team_id,
-            "parent_id": parent_id,
+            "parent_id": parent_id or _root_id(client, token),
         },
         headers=auth(token),
     )
@@ -50,7 +70,7 @@ def make_mobile(client, token, team_id, name="Multimeter", parent_id=None):
             "name": name,
             "kind": "mobile",
             "responsible_team_id": team_id,
-            "parent_id": parent_id,
+            "parent_id": parent_id or _root_id(client, token),
         },
         headers=auth(token),
     )
@@ -65,7 +85,7 @@ def make_exact_stock(client, token, team_id, name="Resistors", qty=50, parent_id
             "name": name,
             "kind": "stock",
             "responsible_team_id": team_id,
-            "parent_id": parent_id,
+            "parent_id": parent_id or _root_id(client, token),
             "stock_mode": "exact",
             "quantity": qty,
         },
@@ -107,6 +127,7 @@ class TestCreateValidation:
                 "name": "Heatshrink",
                 "kind": "stock",
                 "responsible_team_id": default_team.id,
+                "parent_id": _root_id(client, user_token),
                 "stock_mode": "fuzzy",
                 "fuzzy_state": "plentiful",
             },
@@ -169,13 +190,14 @@ class TestCreateValidation:
         )
         assert resp.status_code == 422
 
-    def test_nonexistent_team_rejected(self, client: TestClient, user_token: str) -> None:
+    def test_nonexistent_team_rejected(self, client: TestClient, user_token: str, root_bitza) -> None:
         resp = client.post(
             BASE + "/",
             json={
                 "name": "Ghost Team",
                 "kind": "fixed",
                 "responsible_team_id": "00000000-0000-0000-0000-000000000000",
+                "parent_id": root_bitza.id,
             },
             headers=auth(user_token),
         )
@@ -243,6 +265,95 @@ class TestHierarchy:
 
         resp = client.delete(f"{BASE}/{parent['id']}", headers=auth(admin_token))
         assert resp.status_code == 409
+
+
+# =========================================================================
+# The single, permanent root bitza — see SystemConfig's model docstring
+# for the "no per-row flag" design rationale.
+# =========================================================================
+
+class TestRootBitza:
+    def test_create_without_parent_rejected(self, client: TestClient, user_token: str, default_team: Team) -> None:
+        """
+        parent_id is required on BitzaCreate — the ordinary API can never
+        produce a second root-level bitza. Rejected by Pydantic itself,
+        before the request reaches the service layer at all.
+        """
+        resp = client.post(
+            BASE + "/",
+            json={"name": "Another Root?", "kind": "fixed", "responsible_team_id": default_team.id},
+            headers=auth(user_token),
+        )
+        assert resp.status_code == 422
+
+    def test_root_flagged_is_root_true(
+        self, client: TestClient, user_token: str, root_bitza: Bitza
+    ) -> None:
+        resp = client.get(f"{BASE}/{root_bitza.id}", headers=auth(user_token))
+        assert resp.status_code == 200
+        assert resp.json()["is_root"] is True
+
+    def test_ordinary_bitza_flagged_is_root_false(
+        self, client: TestClient, user_token: str, default_team: Team
+    ) -> None:
+        ordinary = make_fixed(client, user_token, default_team.id, name="Ordinary Shelf")
+        resp = client.get(f"{BASE}/{ordinary['id']}", headers=auth(user_token))
+        assert resp.status_code == 200
+        assert resp.json()["is_root"] is False
+
+    def test_root_only_listing_returns_exactly_the_root(
+        self, client: TestClient, user_token: str, root_bitza: Bitza, default_team: Team
+    ) -> None:
+        """
+        Even after ordinary bitzas exist elsewhere in the tree, root_only
+        listing returns exactly the one root — there's no longer any way
+        for a second root-level item to sneak in via the ordinary API.
+        """
+        make_fixed(client, user_token, default_team.id, name="Somewhere Under Root")
+        resp = client.get(f"{BASE}/?root_only=true", headers=auth(user_token))
+        assert resp.status_code == 200
+        ids = [b["id"] for b in resp.json()]
+        assert ids == [root_bitza.id]
+
+    def test_root_cannot_be_deleted_even_by_superuser(
+        self, client: TestClient, superuser_token: str, root_bitza: Bitza
+    ) -> None:
+        """
+        Unconditional protection — unlike every other permission floor in
+        this app (role-based), this applies regardless of who's asking.
+        """
+        resp = client.delete(f"{BASE}/{root_bitza.id}", headers=auth(superuser_token))
+        assert resp.status_code == 409
+
+    def test_root_cannot_be_retired(
+        self, client: TestClient, user_token: str, root_bitza: Bitza
+    ) -> None:
+        resp = client.post(
+            f"{BASE}/{root_bitza.id}/retire",
+            json={"reason": "lost"},
+            headers=auth(user_token),
+        )
+        assert resp.status_code == 409
+
+    def test_root_parent_id_is_immutable(
+        self, client: TestClient, user_token: str, root_bitza: Bitza, default_team: Team
+    ) -> None:
+        """The root can never be reparented — it's the tree's permanent anchor."""
+        somewhere = make_fixed(client, user_token, default_team.id, name="Somewhere")
+        resp = client.patch(
+            f"{BASE}/{root_bitza.id}", json={"parent_id": somewhere["id"]}, headers=auth(user_token)
+        )
+        assert resp.status_code == 409
+
+    def test_root_name_and_team_remain_editable(
+        self, client: TestClient, user_token: str, root_bitza: Bitza
+    ) -> None:
+        """Only structural fields (parent_id) are protected — cosmetic edits are fine."""
+        resp = client.patch(
+            f"{BASE}/{root_bitza.id}", json={"name": "Renamed Root"}, headers=auth(user_token)
+        )
+        assert resp.status_code == 200
+        assert resp.json()["name"] == "Renamed Root"
 
 
 # =========================================================================
@@ -525,6 +636,7 @@ class TestStockAdjustments:
                 "name": "Zip Ties",
                 "kind": "stock",
                 "responsible_team_id": default_team.id,
+                "parent_id": _root_id(client, user_token),
                 "stock_mode": "fuzzy",
                 "fuzzy_state": "plentiful",
             },
@@ -555,18 +667,20 @@ class TestCategories:
         cat = client.post(
             BASE_CAT + "/", json={"name": "ICs"}, headers=auth(user_token)
         ).json()
-        client.post(
+        create_resp = client.post(
             BASE + "/",
             json={
                 "name": "ATmega328P",
                 "kind": "stock",
                 "responsible_team_id": default_team.id,
+                "parent_id": _root_id(client, user_token),
                 "category_id": cat["id"],
                 "stock_mode": "exact",
                 "quantity": 4,
             },
             headers=auth(user_token),
         )
+        assert create_resp.status_code == 201, create_resp.text
         resp = client.delete(f"{BASE_CAT}/{cat['id']}", headers=auth(user_token))
         assert resp.status_code == 409
 

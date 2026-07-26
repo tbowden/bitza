@@ -26,6 +26,13 @@ export interface Bitza {
   parent_id: string | null;
   responsible_team_id: string;
   status: BitzaStatus;
+  /**
+   * True for exactly one bitza system-wide — the tree's single, permanent
+   * anchor. Computed by the backend (not a stored flag on every row — see
+   * bitza_frontend_context.md / the backend's SystemConfig model). Used
+   * to hide retire/delete/move actions the backend will reject anyway.
+   */
+  is_root: boolean;
   retired_reason: RetiredReason | null;
   retired_note: string | null;
   category_id: string | null;
@@ -49,7 +56,12 @@ export interface Bitza {
 export interface BitzaCreate {
   name: string;
   kind: BitzaKind;
-  parent_id?: string | null;
+  /**
+   * Required — the backend rejects a missing/null parent_id outright.
+   * There is exactly one root bitza system-wide, created once via the
+   * backend CLI's create-root command, never through this endpoint.
+   */
+  parent_id: string;
   responsible_team_id: string;
   category_id?: string | null;
   description?: string | null;

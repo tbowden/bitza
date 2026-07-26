@@ -22,6 +22,7 @@ from app.models.category import Category  # noqa: F401
 from app.models.bitza import Bitza, BitzaImage, Checkout, StockLog  # noqa: F401
 from app.models.audit import AuditLog  # noqa: F401
 from app.models.user import User  # noqa: F401
+from app.models.system_config import SystemConfig  # noqa: F401
 
 settings = get_settings()
 

@@ -41,6 +41,11 @@ import {
   ReassignTeamResult,
 } from '../reassign-team-dialog/reassign-team-dialog';
 import { RetireDialog, RetireDialogResult } from '../retire-dialog/retire-dialog';
+import {
+  MoveBitzaDialog,
+  MoveBitzaDialogData,
+  MoveBitzaResult,
+} from '../move-bitza-dialog/move-bitza-dialog';
 import { CheckoutSection } from '../checkout-section/checkout-section';
 import { StockSection } from '../stock-section/stock-section';
 import { ImageGallery } from '../image-gallery/image-gallery';
@@ -73,17 +78,24 @@ import { ImageGallery } from '../image-gallery/image-gallery';
 
     @if (loadError()) {
       <p class="error-text" role="alert">Couldn't load this bitza.</p>
+    } @else if (!currentId()) {
+      <h1>Not set up yet</h1>
+      <p>
+        This deployment doesn't have a root bitza yet — everything in Bitza lives under one
+        permanent top-level container, created once by an administrator via the backend's
+        <code>create-root</code> command. Once that's done, this page will take you straight there.
+      </p>
     } @else {
-      @if (!currentId()) {
-        <h1>Bitzas</h1>
-      }
-      @if (currentId() && currentBitza(); as bitza) {
+      @if (currentBitza(); as bitza) {
         <mat-card class="bitza-card">
           <mat-card-header>
             <mat-card-title
               ><h1>{{ bitza.name }}</h1></mat-card-title
             >
             <mat-card-subtitle>
+              @if (bitza.is_root) {
+                <span class="bitza-tag root-tag">root</span>
+              }
               <span class="bitza-tag">{{ bitza.kind }}</span>
               @if (bitza.status === 'retired') {
                 <span class="bitza-tag retired-tag">retired — {{ bitza.retired_reason }}</span>
@@ -157,22 +169,28 @@ import { ImageGallery } from '../image-gallery/image-gallery';
               <mat-icon>swap_horiz</mat-icon>
               Reassign {{ config.teamLabelSingular().toLowerCase() }}
             </button>
-            @if (bitza.status === 'active') {
-              <button mat-button type="button" (click)="onRetire(bitza)">
-                <mat-icon>archive</mat-icon>
-                Retire
+            @if (!bitza.is_root) {
+              <button mat-button type="button" (click)="onMove(bitza)">
+                <mat-icon>drive_file_move</mat-icon>
+                Move
               </button>
-            } @else {
-              <button mat-button type="button" (click)="onReactivate(bitza)">
-                <mat-icon>unarchive</mat-icon>
-                Reactivate
-              </button>
-            }
-            @if (authService.isAdmin()) {
-              <button mat-button color="warn" type="button" (click)="onDelete(bitza)">
-                <mat-icon>delete</mat-icon>
-                Delete
-              </button>
+              @if (bitza.status === 'active') {
+                <button mat-button type="button" (click)="onRetire(bitza)">
+                  <mat-icon>archive</mat-icon>
+                  Retire
+                </button>
+              } @else {
+                <button mat-button type="button" (click)="onReactivate(bitza)">
+                  <mat-icon>unarchive</mat-icon>
+                  Reactivate
+                </button>
+              }
+              @if (authService.isAdmin()) {
+                <button mat-button color="warn" type="button" (click)="onDelete(bitza)">
+                  <mat-icon>delete</mat-icon>
+                  Delete
+                </button>
+              }
             }
           </mat-card-actions>
         </mat-card>
@@ -225,13 +243,6 @@ import { ImageGallery } from '../image-gallery/image-gallery';
           <mat-icon>sell</mat-icon>
           Categories
         </button>
-
-        @if (!currentId()) {
-          <button mat-flat-button color="primary" type="button" (click)="onCreateChild(null)">
-            <mat-icon>add</mat-icon>
-            New bitza
-          </button>
-        }
       </div>
 
       @if (childrenLoading()) {
@@ -299,6 +310,12 @@ import { ImageGallery } from '../image-gallery/image-gallery';
       background: var(--mat-sys-error-container);
       color: var(--mat-sys-on-error-container);
       margin-left: 0.5rem;
+    }
+
+    .root-tag {
+      background: var(--mat-sys-tertiary-container);
+      color: var(--mat-sys-on-tertiary-container);
+      margin-right: 0.5rem;
     }
 
     .qr-block {
@@ -491,10 +508,10 @@ export class BitzaBrowser {
     this.router.navigate(['/bitzas', id]);
   }
 
-  protected onCreateChild(parent: Bitza | null): void {
+  protected onCreateChild(parent: Bitza): void {
     const data: BitzaFormDialogData = {
-      parentId: parent?.id ?? null,
-      defaultTeamId: parent?.responsible_team_id,
+      parentId: parent.id,
+      defaultTeamId: parent.responsible_team_id,
     };
     const dialogRef = this.dialog.open(BitzaFormDialog, { width: '520px', data });
     dialogRef.afterClosed().subscribe((result?: BitzaFormResult) => {
@@ -517,6 +534,26 @@ export class BitzaBrowser {
       this.bitzaService
         .update(bitza.id, result.value)
         .subscribe(() => this.reload.update((n) => n + 1));
+    });
+  }
+
+  protected onMove(bitza: Bitza): void {
+    const data: MoveBitzaDialogData = { bitza };
+    const dialogRef = this.dialog.open(MoveBitzaDialog, { width: '480px', data });
+    dialogRef.afterClosed().subscribe((result?: MoveBitzaResult) => {
+      if (!result) {
+        return;
+      }
+      this.bitzaService.update(bitza.id, { parent_id: result.newParentId }).subscribe({
+        next: () => this.reload.update((n) => n + 1),
+        error: (err: HttpErrorResponse) => {
+          const message =
+            err.status === 409
+              ? "Can't move it there — that would nest it inside itself."
+              : 'Something went wrong moving this bitza.';
+          this.snackBar.open(message, 'Dismiss', { duration: 6000 });
+        },
+      });
     });
   }
 

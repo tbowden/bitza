@@ -24,12 +24,19 @@ class BitzaCreate(BaseModel):
     pre-fill this from the parent's responsible_team_id when adding a
     child under an existing Bitza; the backend only validates presence
     and that the team exists.
+
+    parent_id is likewise REQUIRED (not Optional) — there is exactly one
+    root bitza in the whole tree, created once via the CLI's create-root
+    command and never through this endpoint. See
+    BitzaService.create_root_bitza and RootBitzaExistsError. A request
+    with no parent_id is rejected by Pydantic itself before it ever
+    reaches the service layer.
     """
 
     name: str = Field(min_length=1, max_length=200)
     description: Optional[str] = None
     kind: BitzaKind
-    parent_id: Optional[str] = None
+    parent_id: str
     responsible_team_id: str
     category_id: Optional[str] = None
     tags: Optional[list[str]] = None
@@ -124,6 +131,7 @@ class BitzaRead(BaseModel):
     parent_id: Optional[str]
     parent_name: Optional[str] = None          # populated by service
     child_count: int = 0                        # populated by service
+    is_root: bool = False                        # populated by service — see SystemConfig
 
     responsible_team_id: str
     responsible_team_name: str = ""             # populated by service
@@ -174,6 +182,7 @@ class BitzaListRead(BaseModel):
     fuzzy_state: Optional[FuzzyState]
     is_checked_out: bool = False
     child_count: int = 0
+    is_root: bool = False
 
 
 # ---------------------------------------------------------------------------

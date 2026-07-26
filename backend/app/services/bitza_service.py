@@ -7,7 +7,12 @@ from fastapi import HTTPException, UploadFile, status
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
-from app.core.exceptions import ConflictError, PermissionDeniedError
+from app.core.exceptions import (
+    ConflictError,
+    PermissionDeniedError,
+    RootBitzaExistsError,
+    RootBitzaProtectedError,
+)
 from app.models.audit import AuditLog
 from app.models.category import Category
 from app.models.bitza import (
@@ -26,6 +31,7 @@ from app.repositories.bitza_repository import BitzaRepository
 from app.repositories.category_repository import CategoryRepository
 from app.repositories.checkout_repository import CheckoutRepository
 from app.repositories.stock_log_repository import StockLogRepository
+from app.repositories.system_config_repository import SystemConfigRepository
 from app.repositories.team_repository import TeamRepository
 from app.repositories.user_repository import UserRepository
 from app.schemas.audit import AuditLogRead
@@ -88,6 +94,7 @@ class BitzaService:
         stock_log_repo: StockLogRepository,
         image_repo: BitzaImageRepository,
         audit_repo: AuditRepository,
+        system_config_repo: SystemConfigRepository,
     ) -> None:
         self._db = db
         self._bitzas = bitza_repo
@@ -98,6 +105,7 @@ class BitzaService:
         self._stock_logs = stock_log_repo
         self._images = image_repo
         self._audit = audit_repo
+        self._system_config = system_config_repo
 
     # ------------------------------------------------------------------
     # Category CRUD — unchanged in behaviour from Phase 2, just now
@@ -140,6 +148,62 @@ class BitzaService:
         self._db.commit()
 
     # ------------------------------------------------------------------
+    # Root bitza bootstrap (CLI only) — mirrors UserService's superuser
+    # bootstrap pattern: a well-known singleton, created once, outside
+    # the ordinary create path. See SystemConfig's model docstring for
+    # why this is a separate pointer table rather than a flag column on
+    # every bitza.
+    # ------------------------------------------------------------------
+
+    def get_root_bitza(self) -> Optional[BitzaRead]:
+        """
+        Return the existing root bitza, if the system has been
+        bootstrapped yet. CLI helper — no actor required, mirroring
+        UserService.get_superuser (the CLI itself is the trusted
+        boundary, unlike an authenticated API request).
+        """
+        config = self._system_config.get()
+        if not config:
+            return None
+        root = self._bitzas.get(config.root_bitza_id)
+        if not root:
+            return None
+        return self._enrich_bitza(root, root_id=config.root_bitza_id)
+
+    def create_root_bitza(self, name: str, responsible_team_id: str) -> BitzaRead:
+        """
+        Create the single, permanent root of the bitza tree.
+
+        Only callable from the CLI (create-root) — not exposed as an API
+        endpoint, exactly like UserService.create_superuser. Ordinary
+        POST /bitzas/ can never produce a root-level bitza: parent_id is
+        a required field on BitzaCreate specifically so this is the only
+        path that can ever create one. Not audited, not attributed to an
+        actor — there is no authenticated user in a CLI bootstrap
+        context, matching create_superuser's behaviour.
+        """
+        if self._system_config.get():
+            raise RootBitzaExistsError()
+        if not self._teams.get(responsible_team_id):
+            raise _not_found("Responsible team not found")
+
+        root = Bitza(
+            id=str(uuid.uuid4()),
+            name=name,
+            kind=BitzaKind.fixed,
+            parent_id=None,
+            responsible_team_id=responsible_team_id,
+        )
+        created = self._bitzas.create(root)
+        self._system_config.create(root_bitza_id=created.id)
+        self._db.commit()
+        return self._enrich_bitza(created, root_id=created.id)
+
+    def _get_root_bitza_id(self) -> Optional[str]:
+        config = self._system_config.get()
+        return config.root_bitza_id if config else None
+
+    # ------------------------------------------------------------------
     # Create / read / update / delete
     # ------------------------------------------------------------------
 
@@ -174,13 +238,13 @@ class BitzaService:
         created = self._bitzas.create(bitza)
         self._write_audit("bitza", created.id, "CREATE", actor.id, f"Created '{created.name}'")
         self._db.commit()
-        return self._enrich_bitza(created)
+        return self._enrich_bitza(created, root_id=self._get_root_bitza_id())
 
     def get_bitza(self, bitza_id: str) -> BitzaRead:
         bitza = self._bitzas.get(bitza_id)
         if not bitza:
             raise _not_found("Bitza not found")
-        return self._enrich_bitza(bitza)
+        return self._enrich_bitza(bitza, root_id=self._get_root_bitza_id())
 
     def list_bitzas(
         self,
@@ -191,6 +255,8 @@ class BitzaService:
         responsible_team_id: Optional[str] = None,
         category_id: Optional[str] = None,
     ) -> list[BitzaListRead]:
+        root_id = self._get_root_bitza_id()
+
         if parent_id is not None:
             bitzas = self._bitzas.list_by_parent(parent_id)
         elif root_only:
@@ -202,7 +268,7 @@ class BitzaService:
                 responsible_team_id=responsible_team_id,
                 category_id=category_id,
             )
-            return [self._enrich_bitza_list(b) for b in bitzas]
+            return [self._enrich_bitza_list(b, root_id=root_id) for b in bitzas]
 
         # parent_id / root_only paths: apply the remaining filters in memory
         # (direct-children/roots result sets are small — see
@@ -215,7 +281,7 @@ class BitzaService:
             bitzas = [b for b in bitzas if b.responsible_team_id == responsible_team_id]
         if category_id is not None:
             bitzas = [b for b in bitzas if b.category_id == category_id]
-        return [self._enrich_bitza_list(b) for b in bitzas]
+        return [self._enrich_bitza_list(b, root_id=root_id) for b in bitzas]
 
     def update_bitza(self, bitza_id: str, data: BitzaUpdate, actor: User) -> BitzaRead:
         bitza = self._bitzas.get(bitza_id)
@@ -223,6 +289,10 @@ class BitzaService:
             raise _not_found("Bitza not found")
 
         if data.parent_id is not None and data.parent_id != bitza.parent_id:
+            if bitza_id == self._get_root_bitza_id():
+                raise RootBitzaProtectedError(
+                    "The root bitza is the tree's permanent anchor and can never be moved."
+                )
             new_parent = self._bitzas.get(data.parent_id)
             if not new_parent:
                 raise _not_found("New parent bitza not found")
@@ -261,7 +331,7 @@ class BitzaService:
         updated = self._bitzas.update(bitza)
         self._write_audit("bitza", bitza_id, "UPDATE", actor.id, f"Updated '{bitza.name}'")
         self._db.commit()
-        return self._enrich_bitza(updated)
+        return self._enrich_bitza(updated, root_id=self._get_root_bitza_id())
 
     def delete_bitza(self, bitza_id: str, actor: User) -> None:
         if actor.role not in (UserRole.admin, UserRole.superuser):
@@ -272,6 +342,13 @@ class BitzaService:
         bitza = self._bitzas.get(bitza_id)
         if not bitza:
             raise _not_found("Bitza not found")
+        if bitza_id == self._get_root_bitza_id():
+            # Unconditional — unlike the permission check above, this applies
+            # regardless of role. The root is a structural anchor, not an
+            # ordinary record with elevated protection.
+            raise RootBitzaProtectedError(
+                "The root bitza is the tree's permanent anchor and can never be deleted."
+            )
         child_count = self._bitzas.count_children(bitza_id)
         if child_count > 0:
             raise ConflictError(
@@ -290,6 +367,10 @@ class BitzaService:
         bitza = self._bitzas.get(bitza_id)
         if not bitza:
             raise _not_found("Bitza not found")
+        if bitza_id == self._get_root_bitza_id():
+            raise RootBitzaProtectedError(
+                "The root bitza is the tree's permanent anchor and can never be retired."
+            )
         bitza.status = BitzaStatus.retired
         bitza.retired_reason = data.reason
         bitza.retired_note = data.note
@@ -301,7 +382,7 @@ class BitzaService:
             f"Retired '{bitza.name}' (reason={data.reason.value})",
         )
         self._db.commit()
-        return self._enrich_bitza(updated)
+        return self._enrich_bitza(updated, root_id=self._get_root_bitza_id())
 
     def reactivate_bitza(self, bitza_id: str, actor: User) -> BitzaRead:
         bitza = self._bitzas.get(bitza_id)
@@ -315,7 +396,7 @@ class BitzaService:
         updated = self._bitzas.update(bitza)
         self._write_audit("bitza", bitza_id, "REACTIVATE", actor.id, f"Reactivated '{bitza.name}'")
         self._db.commit()
-        return self._enrich_bitza(updated)
+        return self._enrich_bitza(updated, root_id=self._get_root_bitza_id())
 
     # ------------------------------------------------------------------
     # Team reassignment — the one place this service walks a full subtree
@@ -637,8 +718,9 @@ class BitzaService:
         user = self._users.get_by_id(user_id)
         return user.display_name if user else user_id
 
-    def _enrich_bitza(self, bitza: Bitza) -> BitzaRead:
+    def _enrich_bitza(self, bitza: Bitza, root_id: Optional[str]) -> BitzaRead:
         r = BitzaRead.model_validate(bitza)
+        r.is_root = bitza.id == root_id
 
         if bitza.parent_id:
             parent = self._bitzas.get(bitza.parent_id)
@@ -665,8 +747,9 @@ class BitzaService:
 
         return r
 
-    def _enrich_bitza_list(self, bitza: Bitza) -> BitzaListRead:
+    def _enrich_bitza_list(self, bitza: Bitza, root_id: Optional[str]) -> BitzaListRead:
         r = BitzaListRead.model_validate(bitza)
+        r.is_root = bitza.id == root_id
         if bitza.parent_id:
             parent = self._bitzas.get(bitza.parent_id)
             r.parent_name = parent.name if parent else None
