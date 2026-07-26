@@ -196,32 +196,44 @@ Angular version bumps and something stops working.
 
 ---
 
-## Assumptions needing backend confirmation
+## Schema drift between frontend models and the live backend — see dedicated doc
 
-None of these are hypothetical risk-aversion — each one is flagged inline
-in the relevant service file's doc comment too, but consolidating them
-here since they cut across milestones:
+**`bitza_schema_reconciliation_todo.md` is the authoritative, current
+account of this** — read it before touching Users, Teams, Checkout, or
+Audit Log. Short version: the frontend was built from
+`bitza_project_context.md`'s prose description of the API, and in
+several places that description (and therefore the frontend) has
+drifted from what the backend's actual Pydantic schemas define. This
+was discovered by reading `backend/app/schemas/*.py` directly, not by
+observing a failure — this project has never had a live click-through
+against a running backend (see "Stage 3 caveats" above).
 
-1. **`GET /api/v1/users/`** — the docs say the `/users/` directory is
-   admin/superuser-gated, but the Team/Bitza trust model requires any
-   user to be able to add any other user to any team, which needs some
-   way to browse/look up users. The frontend calls `GET /users/` as the
-   natural read for both the team-member-add picker (Milestone 2) *and*
-   the admin users list (Milestone 5) — for the latter it's genuinely
-   meant to be gated, so this probably needs to resolve as "list reads
-   are open, only mutations are gated," but that's a guess. **Check this
-   against the actual backend before relying on either UI flow.**
-2. **Admin user CRUD shapes** (`POST /users/`, `PATCH /users/{id}`,
-   `DELETE /users/{id}`) — the docs describe the *permission table* for
-   account management but never the request/response shapes. The
-   frontend assumes plain REST shapes matching the rest of the app's
-   style, and models suspend/unsuspend as a plain `PATCH
-   {is_suspended: bool}` rather than a dedicated endpoint (there's no
-   documented precedent either way). See `user.model.ts`'s
-   `UserCreate`/`AdminUserUpdate` doc comments.
-3. **Audit log filter params** — assumed `GET /audit/?user_id=&action=`
-   works as a query-string filter; never confirmed against a real
-   endpoint.
+At minimum, five things are likely completely non-functional right now:
+creating a user (missing required `display_name`), suspend/unsuspend
+(backend uses `is_active` — opposite polarity from the frontend's
+`is_suspended`), checkout holder display (`holder_id` vs `user_id`),
+team member names (`user_display_name` vs assumed `username`/`email`),
+and audit log summaries (`description` vs `summary`). The reconciliation
+doc has exact file/field references for all of these plus a longer list
+of merely-missing-but-harmless fields. Once that work is done, this
+section should be considered resolved and can be trimmed down to
+whatever's still genuinely open.
+
+The one thing already fully confirmed clean: **Auth** (`schemas/auth.py`)
+matches the frontend exactly — no drift there.
+
+Separately, still genuinely open (not covered by the reconciliation doc,
+since it's a permissions question rather than a shape question):
+
+- **`GET /api/v1/users/`** — the docs say the `/users/` directory is
+  admin/superuser-gated, but the Team/Bitza trust model requires any
+  user to be able to add any other user to any team, which needs some
+  way to browse/look up users. The frontend calls `GET /users/` as the
+  natural read for both the team-member-add picker (Milestone 2) *and*
+  the admin users list (Milestone 5) — for the latter it's genuinely
+  meant to be gated, so this probably needs to resolve as "list reads
+  are open, only mutations are gated," but that's a guess. **Check this
+  against the actual backend before relying on either UI flow.**
 
 ---
 
