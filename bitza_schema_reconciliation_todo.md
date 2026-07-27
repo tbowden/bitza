@@ -132,6 +132,22 @@ that should be corrected for accuracy even though it hasn't bitten yet.
   from `user_id`/`team_id`) — not currently used for anything and routing
   doesn't need it (confirmed — see #4 above), but worth capturing for
   accuracy.
+- **`BitzaFormDialog`'s "Stock tracking" dropdown is interactive but inert
+  during edit.** The `stock_mode` `<mat-select>` is shown (and editable)
+  whenever `kind === 'stock'`, regardless of `isEdit` — but the edit
+  submit handler never includes `stock_mode` in the `BitzaUpdate` payload,
+  correctly, since the backend has no such field there: `BitzaUpdate`'s
+  own docstring says *"kind is intentionally NOT editable — converting a
+  fixed location into a checkoutable tool (or vice versa) is a
+  re-creation, not an update,"* and `stock_mode` is tied to `kind` the
+  same way. An admin can flip the dropdown mid-edit, see no error, and
+  reasonably believe they've changed how the stock is tracked — nothing
+  actually changes on save. Not currently breaking anything (the rest of
+  the edit still submits fine), but misleading. Found while fixing the
+  `quantity` bug below; not fixed yet. Likely fix: disable the control
+  (`[disabled]="isEdit"`) or hide it entirely on edit, matching the
+  `kind`-is-readonly treatment already used just above it in the same
+  form.
 
 ---
 
