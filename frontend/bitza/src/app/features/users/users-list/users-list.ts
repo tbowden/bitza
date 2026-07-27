@@ -103,12 +103,13 @@ export class UsersList {
   }
 
   protected onToggleSuspend(user: User): void {
-    const action = user.is_suspended ? 'unsuspend' : 'suspend';
+    const action = user.is_active ? 'suspend' : 'unsuspend';
     const data: ConfirmDialogData = {
-      title: `${user.is_suspended ? 'Unsuspend' : 'Suspend'} ${user.username}?`,
-      message: user.is_suspended
-        ? 'They will be able to sign in again.'
-        : "They won't be able to sign in until unsuspended.",
+      title: `${action === 'suspend' ? 'Suspend' : 'Unsuspend'} ${user.username}?`,
+      message:
+        action === 'suspend'
+          ? "They won't be able to sign in until unsuspended."
+          : 'They will be able to sign in again.',
       confirmLabel: action === 'suspend' ? 'Suspend' : 'Unsuspend',
       destructive: action === 'suspend',
     };
@@ -118,7 +119,7 @@ export class UsersList {
         return;
       }
       this.userService
-        .adminUpdate(user.id, { is_suspended: !user.is_suspended })
+        .adminUpdate(user.id, { is_active: !user.is_active })
         .subscribe(() => this.reload.update((n) => n + 1));
     });
   }

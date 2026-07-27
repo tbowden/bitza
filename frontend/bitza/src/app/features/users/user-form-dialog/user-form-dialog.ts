@@ -20,6 +20,7 @@ export type UserFormResult =
 interface UserFormModel {
   email: string;
   username: string;
+  display_name: string;
   password: string;
   role: UserRole;
   is_suspended: boolean;
@@ -75,14 +76,18 @@ export class UserFormDialog {
   protected readonly model = signal<UserFormModel>({
     email: this.data?.user?.email ?? '',
     username: this.data?.user?.username ?? '',
+    display_name: this.data?.user?.display_name ?? '',
     password: '',
     role: this.data?.user?.role ?? 'user',
-    is_suspended: this.data?.user?.is_suspended ?? false,
+    // `is_suspended` here is local form UI state only — the backend has no
+    // such field, only `is_active` (opposite polarity). Invert on the way in.
+    is_suspended: !(this.data?.user?.is_active ?? true),
   });
 
   protected readonly userForm = form(this.model, (path) => {
     required(path.email, { message: 'Email is required' });
     required(path.username, { message: 'Username is required' });
+    required(path.display_name, { message: 'Display name is required' });
 
     applyWhen(
       path,
@@ -102,12 +107,13 @@ export class UserFormDialog {
         const update: AdminUserUpdate = {
           email: value.email,
           username: value.username,
+          display_name: value.display_name,
         };
         if (this.canChangeRole()) {
           update.role = value.role;
         }
         if (this.canToggleSuspension()) {
-          update.is_suspended = value.is_suspended;
+          update.is_active = !value.is_suspended;
         }
         this.dialogRef.close({ mode: 'edit', value: update });
         return undefined;
@@ -116,6 +122,7 @@ export class UserFormDialog {
       const create: UserCreate = {
         email: value.email,
         username: value.username,
+        display_name: value.display_name,
         password: value.password,
         role: this.authService.isSuperuser() ? value.role : 'user',
       };

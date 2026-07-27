@@ -9,8 +9,14 @@ export interface User {
   id: string;
   email: string;
   username: string;
+  display_name: string;
   role: UserRole;
-  is_suspended: boolean;
+  /**
+   * Backend polarity (`UserRead.is_active`): true = can sign in, false =
+   * suspended. This is the *opposite* sense of the old `is_suspended`
+   * field this replaces — see AdminUserUpdate below.
+   */
+  is_active: boolean;
   created_at: string;
 }
 
@@ -27,23 +33,32 @@ export interface UserUpdate {
  * role controls, create-admin, suspend/delete) but not the exact request
  * shapes for create/suspend — these are the natural REST shapes given
  * everything else in the app, flagged here in case the backend differs.
+ *
+ * `display_name` is REQUIRED by the backend (`schemas/user.py`,
+ * min_length=1) — distinct from `username` (the login handle). Omitting
+ * it is why user creation was completely broken: every submission got
+ * rejected with a 422 the UI never explained.
  */
 export interface UserCreate {
   email: string;
   username: string;
+  display_name: string;
   password: string;
   role: UserRole;
 }
 
 /**
- * Modelled as a plain PATCH including `is_suspended`, matching the rest
- * of the app's style (e.g. fuzzy_state) rather than a dedicated
- * suspend/unsuspend endpoint — flagged as an assumption, not confirmed
- * against a documented endpoint shape.
+ * Matches backend `UserUpdate` — a plain PATCH, admin/superuser-gated.
+ * `is_active` (not `is_suspended`) is the backend's actual field: true =
+ * active/can sign in, false = suspended. To suspend, send
+ * `is_active: false`; to unsuspend, send `is_active: true` — i.e. always
+ * the *opposite* of the user's current `is_active`, not of some
+ * `is_suspended` flag that doesn't exist on the wire.
  */
 export interface AdminUserUpdate {
+  display_name?: string;
   email?: string;
   username?: string;
   role?: UserRole;
-  is_suspended?: boolean;
+  is_active?: boolean;
 }

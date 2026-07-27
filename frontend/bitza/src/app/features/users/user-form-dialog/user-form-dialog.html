@@ -18,6 +18,14 @@
       }
     </mat-form-field>
 
+    <mat-form-field appearance="outline" class="full-width">
+      <mat-label>Display name</mat-label>
+      <input matInput type="text" [formField]="userForm.display_name" />
+      @if (userForm.display_name().touched() && userForm.display_name().invalid()) {
+        <mat-error>Display name is required.</mat-error>
+      }
+    </mat-form-field>
+
     @if (!isEdit) {
       <mat-form-field appearance="outline" class="full-width">
         <mat-label>Password</mat-label>

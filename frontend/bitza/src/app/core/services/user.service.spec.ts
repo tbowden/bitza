@@ -21,13 +21,20 @@ describe('UserService', () => {
 
   it('creates a user with the given role', async () => {
     const promise = firstValueFrom(
-      service.create({ email: 'a@b.com', username: 'sam', password: 'hunter2', role: 'user' }),
+      service.create({
+        email: 'a@b.com',
+        username: 'sam',
+        display_name: 'Sam Smith',
+        password: 'hunter2',
+        role: 'user',
+      }),
     );
     const req = httpMock.expectOne(`${environment.apiUrl}/users/`);
     expect(req.request.method).toBe('POST');
     expect(req.request.body).toEqual({
       email: 'a@b.com',
       username: 'sam',
+      display_name: 'Sam Smith',
       password: 'hunter2',
       role: 'user',
     });
@@ -35,24 +42,26 @@ describe('UserService', () => {
       id: 'u1',
       email: 'a@b.com',
       username: 'sam',
+      display_name: 'Sam Smith',
       role: 'user',
-      is_suspended: false,
+      is_active: true,
       created_at: '2026-01-01',
     });
     await promise;
   });
 
   it('sends only the provided fields on admin update', async () => {
-    const promise = firstValueFrom(service.adminUpdate('u1', { is_suspended: true }));
+    const promise = firstValueFrom(service.adminUpdate('u1', { is_active: false }));
     const req = httpMock.expectOne(`${environment.apiUrl}/users/u1`);
     expect(req.request.method).toBe('PATCH');
-    expect(req.request.body).toEqual({ is_suspended: true });
+    expect(req.request.body).toEqual({ is_active: false });
     req.flush({
       id: 'u1',
       email: 'a@b.com',
       username: 'sam',
+      display_name: 'Sam Smith',
       role: 'user',
-      is_suspended: true,
+      is_active: false,
       created_at: '2026-01-01',
     });
     await promise;

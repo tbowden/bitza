@@ -41,8 +41,9 @@ describe('AuthService', () => {
       id: 'u1',
       email: 'sam@example.com',
       username: 'sam',
+      display_name: 'Sam Smith',
       role: 'user',
-      is_suspended: false,
+      is_active: true,
       created_at: '2026-01-01T00:00:00Z',
     });
 
