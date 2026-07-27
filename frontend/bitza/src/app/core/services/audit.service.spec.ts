@@ -27,13 +27,13 @@ describe('AuditService', () => {
     await promise;
   });
 
-  it('filters by user_id and action when provided', async () => {
-    const promise = firstValueFrom(service.list({ user_id: 'u1', action: 'retire' }));
+  it('filters by entity_type and entity_id when provided', async () => {
+    const promise = firstValueFrom(service.list({ entity_type: 'bitza', entity_id: 'b1' }));
     const req = httpMock.expectOne(
       (r) =>
         r.url === `${environment.apiUrl}/audit/` &&
-        r.params.get('user_id') === 'u1' &&
-        r.params.get('action') === 'retire',
+        r.params.get('entity_type') === 'bitza' &&
+        r.params.get('entity_id') === 'b1',
     );
     req.flush([]);
     await promise;
