@@ -1,6 +1,6 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
-import { FormField, applyWhen, form, required, submit } from '@angular/forms/signals';
+import { FormField, applyWhen, form, min, required, submit } from '@angular/forms/signals';
 import { MatButtonModule } from '@angular/material/button';
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatExpansionModule } from '@angular/material/expansion';
@@ -45,6 +45,8 @@ interface BitzaFormModel {
   category_id: string;
   description: string;
   stock_mode: StockMode | '';
+  /** Only meaningful (and only sent) when stock_mode = 'exact', create only. */
+  quantity: number;
   fuzzy_state: FuzzyState | '';
   vendor: string;
   purchase_date: string;
@@ -145,6 +147,16 @@ const KIND_OPTIONS: { value: BitzaKind; label: string }[] = [
               }
             </mat-form-field>
           }
+
+          @if (!isEdit && bitzaForm.stock_mode().value() === 'exact') {
+            <mat-form-field appearance="outline" class="full-width">
+              <mat-label>Starting quantity</mat-label>
+              <input matInput type="number" [formField]="bitzaForm.quantity" />
+              @if (bitzaForm.quantity().touched() && bitzaForm.quantity().invalid()) {
+                <mat-error>Enter a starting quantity of 0 or more.</mat-error>
+              }
+            </mat-form-field>
+          }
         }
 
         <mat-form-field appearance="outline" class="full-width">
@@ -229,6 +241,7 @@ export class BitzaFormDialog {
     category_id: this.data?.bitza?.category_id ?? '',
     description: this.data?.bitza?.description ?? '',
     stock_mode: this.data?.bitza?.stock_mode ?? '',
+    quantity: this.data?.bitza?.quantity ?? 0,
     fuzzy_state: this.data?.bitza?.fuzzy_state ?? '',
     vendor: this.data?.bitza?.vendor ?? '',
     purchase_date: this.data?.bitza?.purchase_date ?? '',
@@ -249,6 +262,14 @@ export class BitzaFormDialog {
           (ctx) => ctx.valueOf(path.stock_mode) === 'fuzzy',
           (path) => {
             required(path.fuzzy_state, { message: 'Starting state is required' });
+          },
+        );
+        applyWhen(
+          path,
+          (ctx) => !this.isEdit && ctx.valueOf(path.stock_mode) === 'exact',
+          (path) => {
+            required(path.quantity, { message: 'Starting quantity is required' });
+            min(path.quantity, 0, { message: 'Quantity cannot be negative' });
           },
         );
       },
@@ -298,6 +319,8 @@ export class BitzaFormDialog {
         create.stock_mode = value.stock_mode as StockMode;
         if (value.stock_mode === 'fuzzy' && value.fuzzy_state) {
           create.fuzzy_state = value.fuzzy_state as FuzzyState;
+        } else if (value.stock_mode === 'exact') {
+          create.quantity = value.quantity;
         }
       }
       this.dialogRef.close({ mode: 'create', value: create });

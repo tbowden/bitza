@@ -66,6 +66,8 @@ export interface BitzaCreate {
   category_id?: string | null;
   description?: string | null;
   stock_mode?: StockMode;
+  /** Required by the backend when stock_mode = 'exact'; forbidden otherwise. */
+  quantity?: number;
   fuzzy_state?: FuzzyState;
   purchased_by_user_id?: string;
   vendor?: string;
