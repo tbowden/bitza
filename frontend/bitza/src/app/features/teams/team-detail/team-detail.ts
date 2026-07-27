@@ -82,10 +82,7 @@ import { TeamFormDialog, TeamFormResult } from '../team-form-dialog/team-form-di
           <ng-container matColumnDef="username">
             <th mat-header-cell *matHeaderCellDef>Member</th>
             <td mat-cell *matCellDef="let member">
-              {{ member.username ?? member.user_id }}
-              @if (member.email) {
-                <span class="member-email">{{ member.email }}</span>
-              }
+              {{ member.user_display_name }}
             </td>
           </ng-container>
 
@@ -98,8 +95,8 @@ import { TeamFormDialog, TeamFormResult } from '../team-form-dialog/team-form-di
                 [attr.aria-pressed]="member.is_primary"
                 [attr.aria-label]="
                   member.is_primary
-                    ? 'Unset ' + (member.username ?? 'this member') + ' as primary team'
-                    : 'Set ' + (member.username ?? 'this member') + ' as primary team'
+                    ? 'Unset ' + member.user_display_name + ' as primary team'
+                    : 'Set ' + member.user_display_name + ' as primary team'
                 "
                 [matTooltip]="
                   member.is_primary ? 'Primary team — click to unset' : 'Set as primary team'
@@ -169,12 +166,6 @@ import { TeamFormDialog, TeamFormResult } from '../team-form-dialog/team-form-di
 
     .members-table {
       width: 100%;
-    }
-
-    .member-email {
-      display: block;
-      font-size: 0.8125rem;
-      color: var(--mat-sys-on-surface-variant);
     }
 
     .loading-row {
@@ -315,7 +306,7 @@ export class TeamDetail {
   protected onRemoveMember(teamId: string, member: TeamMember): void {
     const data: ConfirmDialogData = {
       title: 'Remove member?',
-      message: `Remove ${member.username ?? 'this person'} from the team.`,
+      message: `Remove ${member.user_display_name} from the team.`,
       confirmLabel: 'Remove',
       destructive: true,
     };

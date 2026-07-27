@@ -28,11 +28,8 @@ export interface TeamMember {
   user_id: string;
   team_id: string;
   is_primary: boolean;
-  // Convenience fields the list endpoint is expected to embed so the UI
-  // doesn't need a second round trip per member; confirm against the
-  // actual backend response when wiring this up.
-  username?: string;
-  email?: string;
+  /** Always populated by the backend service — never a raw fallback. */
+  user_display_name: string;
 }
 
 export interface TeamMemberCreate {
