@@ -67,6 +67,15 @@ describe('UserService', () => {
     await promise;
   });
 
+  it('fetches the minimal directory', async () => {
+    const promise = firstValueFrom(service.directory());
+    const req = httpMock.expectOne(`${environment.apiUrl}/users/directory`);
+    expect(req.request.method).toBe('GET');
+    req.flush([{ id: 'u1', display_name: 'Sam Smith' }]);
+    const result = await promise;
+    expect(result).toEqual([{ id: 'u1', display_name: 'Sam Smith' }]);
+  });
+
   it('deletes a user', async () => {
     const promise = firstValueFrom(service.delete('u1'));
     const req = httpMock.expectOne(`${environment.apiUrl}/users/u1`);

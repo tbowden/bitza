@@ -119,3 +119,19 @@ class UserListRead(BaseModel):
     role: UserRole
     is_active: bool
     created_at: datetime
+
+
+class UserDirectoryEntry(BaseModel):
+    """
+    Minimal projection for GET /users/directory — deliberately excludes
+    email, role, and is_active. Those stay behind the admin/superuser-only
+    UserListRead gate (see UserService.list_users's permission matrix);
+    this schema exists so any authenticated user can browse *who exists*
+    to power pickers like "add a member to this team" without exposing
+    the fuller admin directory.
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    display_name: str

@@ -28,7 +28,8 @@ class UserService:
     │ Create superuser                │ CLI only  │  ✗    │  ✗   │
     │ Create admin                    │    ✓      │  ✗    │  ✗   │
     │ Create normal user              │    ✓      │  ✓    │  ✗   │
-    │ List / view any user            │    ✓      │  ✓    │  ✗   │
+    │ List / view any user (full)     │    ✓      │  ✓    │  ✗   │
+    │ Browse the minimal directory    │    ✓      │  ✓    │  ✓   │
     │ View own profile                │    ✓      │  ✓    │  ✓   │
     │ Update own profile (self)       │    ✓      │  ✓    │  ✓   │
     │ Update any user details         │    ✓      │ users │  ✗   │
@@ -37,6 +38,14 @@ class UserService:
     │ Delete a user                   │    ✓      │  ✗    │  ✗   │
     │ Be suspended                    │    ✗      │  ✓    │  ✓   │
     └─────────────────────────────────┴───────────┴───────┴──────┘
+
+    "Browse the minimal directory" is list_directory()/GET
+    /users/directory — id + display_name only, via UserDirectoryEntry.
+    It exists specifically so any authenticated user can find another
+    user's id to power pickers like "add a member to this team" (see
+    TeamService.add_member, which is deliberately open to any user)
+    without exposing the admin-only email/role/is_active fields that
+    "List / view any user (full)" gates above.
 
     Methods that set or change passwords are async because they call the
     async validate_password() helper (zxcvbn + optional HIBP breach check).
@@ -168,6 +177,18 @@ class UserService:
         return self._user_repo.list_users(
             skip=skip, limit=limit, role=role, is_active=is_active
         )
+
+    def list_directory(self) -> list[User]:
+        """
+        Minimal, ungated user listing — any authenticated user may call
+        this (no role check, unlike list_users above). Callers must use
+        UserDirectoryEntry as the response model so only id/display_name
+        leave the service; email/role/is_active stay behind list_users's
+        admin/superuser gate. Unfiltered and uncapped-in-practice (500,
+        matching list_users's own upper bound) since this exists to
+        populate pickers that need to see everyone, not a paginated table.
+        """
+        return self._user_repo.list_users(skip=0, limit=500)
 
     # ------------------------------------------------------------------
     # Update (admin/superuser path)

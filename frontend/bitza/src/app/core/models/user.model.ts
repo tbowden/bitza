@@ -20,6 +20,19 @@ export interface User {
   created_at: string;
 }
 
+/**
+ * GET /users/directory — id + display_name only, no email/role/is_active.
+ * Any authenticated user may call this (unlike `list()`/`GET /users/`,
+ * which is genuinely admin/superuser-only — confirmed against
+ * UserService.list_users's permission matrix in the backend, and by a
+ * passing test asserting a 403 for a plain user). This exists
+ * specifically to power pickers like the team add-member dialog.
+ */
+export interface UserDirectoryEntry {
+  id: string;
+  display_name: string;
+}
+
 /** Payload for PATCH /users/me and admin-gated user edits. */
 export interface UserUpdate {
   email?: string;

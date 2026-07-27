@@ -5,7 +5,14 @@ from fastapi import APIRouter, Depends, Query, status
 from app.core.dependencies import get_current_user, get_user_service
 from app.core.exceptions import PermissionDeniedError
 from app.models.user import User, UserRole
-from app.schemas.user import UserCreate, UserListRead, UserRead, UserSelfUpdate, UserUpdate
+from app.schemas.user import (
+    UserCreate,
+    UserDirectoryEntry,
+    UserListRead,
+    UserRead,
+    UserSelfUpdate,
+    UserUpdate,
+)
 from app.services.user_service import UserService
 
 router = APIRouter(prefix="/users", tags=["users"])
@@ -42,7 +49,11 @@ async def update_me(
 # User listing (admin / superuser only)
 # ---------------------------------------------------------------------------
 
-@router.get("/", response_model=list[UserListRead], summary="List users (admin/superuser only)")
+@router.get(
+    "/",
+    response_model=list[UserListRead],
+    summary="List users (admin/superuser only)",
+)
 def list_users(
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=500),
@@ -58,6 +69,29 @@ def list_users(
         role=role,
         is_active=is_active,
     )
+
+
+# Registered before GET /{user_id} — a static path segment must come
+# before a path-parameter route matching the same position, or FastAPI
+# would treat "directory" as a user_id here and 404 in get_user instead.
+@router.get(
+    "/directory",
+    response_model=list[UserDirectoryEntry],
+    summary="Minimal user directory (any authenticated user)",
+)
+def list_directory(
+    current_user: User = Depends(get_current_user),
+    user_service: UserService = Depends(get_user_service),
+) -> list[User]:
+    """
+    Unlike GET /users/ above (admin/superuser only, full UserListRead),
+    this is open to any authenticated user and returns only id +
+    display_name. It exists to power pickers — e.g. "add a member to
+    this team" (POST /teams/{team_id}/members needs a user_id, and is
+    itself open to any authenticated user) — without exposing the
+    admin-only email/role/is_active fields GET /users/ gates.
+    """
+    return user_service.list_directory()
 
 
 # ---------------------------------------------------------------------------

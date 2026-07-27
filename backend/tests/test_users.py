@@ -5,6 +5,7 @@ Covers:
 - GET /me
 - PATCH /me (display_name, password change)
 - GET / (list) — admin/superuser only
+- GET /directory (minimal listing) — any authenticated user
 - POST / (create) — no self-registration, role restrictions
 - GET /{id}
 - PATCH /{id} — permission matrix
@@ -127,6 +128,34 @@ class TestListUsers:
     ) -> None:
         resp = client.get(f"{BASE}/", headers=auth(superuser_token))
         assert resp.status_code == 200
+
+
+# ---------------------------------------------------------------------------
+# Directory (minimal, any authenticated user — see UserService.list_directory)
+# ---------------------------------------------------------------------------
+
+class TestListDirectory:
+    def test_normal_user_can_browse_directory(
+        self, client: TestClient, second_user: User, user_token: str
+    ) -> None:
+        """Unlike GET / above, a plain user is allowed here."""
+        resp = client.get(f"{BASE}/directory", headers=auth(user_token))
+        assert resp.status_code == 200
+        entries = resp.json()
+        assert isinstance(entries, list)
+        assert any(e["id"] == second_user.id for e in entries)
+
+    def test_directory_entries_are_minimal(
+        self, client: TestClient, second_user: User, user_token: str
+    ) -> None:
+        """Only id + display_name — no email/role/is_active leak through."""
+        resp = client.get(f"{BASE}/directory", headers=auth(user_token))
+        entry = next(e for e in resp.json() if e["id"] == second_user.id)
+        assert entry == {"id": second_user.id, "display_name": second_user.display_name}
+
+    def test_unauthenticated_rejected(self, client: TestClient) -> None:
+        resp = client.get(f"{BASE}/directory")
+        assert resp.status_code in (401, 403)
 
 
 # ---------------------------------------------------------------------------

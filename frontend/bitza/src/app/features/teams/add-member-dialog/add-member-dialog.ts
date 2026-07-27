@@ -8,7 +8,7 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { catchError, of } from 'rxjs';
-import { User } from '../../../core/models';
+import { UserDirectoryEntry } from '../../../core/models';
 import { UserService } from '../../../core/services/user.service';
 
 export interface AddMemberDialogData {
@@ -52,7 +52,7 @@ export interface AddMemberResult {
             [value]="searchText()"
             (input)="onSearchInput($event)"
             [matAutocomplete]="auto"
-            placeholder="Search by username or email"
+            placeholder="Search by name"
           />
           <mat-autocomplete
             #auto="matAutocomplete"
@@ -60,14 +60,14 @@ export interface AddMemberResult {
             (optionSelected)="selectedUser.set($event.option.value)"
           >
             @for (user of filteredUsers(); track user.id) {
-              <mat-option [value]="user">{{ user.username }} ({{ user.email }})</mat-option>
+              <mat-option [value]="user">{{ user.display_name }}</mat-option>
             }
           </mat-autocomplete>
         </mat-form-field>
 
         @if (selectedUser(); as user) {
           <p class="selected-user">
-            Selected: <strong>{{ user.username }}</strong>
+            Selected: <strong>{{ user.display_name }}</strong>
           </p>
         }
 
@@ -120,10 +120,10 @@ export class AddMemberDialog {
   protected readonly loadError = this.loadErrorSignal.asReadonly();
 
   private readonly allUsers = toSignal(
-    this.userService.list().pipe(
+    this.userService.directory().pipe(
       catchError(() => {
         this.loadErrorSignal.set(true);
-        return of<User[]>([]);
+        return of<UserDirectoryEntry[]>([]);
       }),
     ),
     { initialValue: undefined },
@@ -132,7 +132,7 @@ export class AddMemberDialog {
   protected readonly usersLoading = computed(() => this.allUsers() === undefined);
 
   protected readonly searchText = signal('');
-  protected readonly selectedUser = signal<User | null>(null);
+  protected readonly selectedUser = signal<UserDirectoryEntry | null>(null);
   protected readonly isPrimary = signal(false);
 
   private readonly pickableUsers = computed(() => {
@@ -147,14 +147,11 @@ export class AddMemberDialog {
     if (!query) {
       return pickable;
     }
-    return pickable.filter(
-      (user) =>
-        user.username.toLowerCase().includes(query) || user.email.toLowerCase().includes(query),
-    );
+    return pickable.filter((user) => user.display_name.toLowerCase().includes(query));
   });
 
-  protected displayUser(user: User | null): string {
-    return user ? user.username : '';
+  protected displayUser(user: UserDirectoryEntry | null): string {
+    return user ? user.display_name : '';
   }
 
   protected onSearchInput(event: Event): void {
