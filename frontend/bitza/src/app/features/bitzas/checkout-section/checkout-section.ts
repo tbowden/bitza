@@ -5,9 +5,8 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatDialog } from '@angular/material/dialog';
 import { MatExpansionModule } from '@angular/material/expansion';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
-import { catchError, forkJoin, map, of, switchMap } from 'rxjs';
+import { catchError, of, switchMap } from 'rxjs';
 import { CheckoutService } from '../../../core/services/checkout.service';
-import { UserService } from '../../../core/services/user.service';
 import { CheckinRequest, Checkout, CheckoutRequest } from '../../../core/models';
 import { CheckinDialog } from '../checkin-dialog/checkin-dialog';
 import { CheckoutDialog } from '../checkout-dialog/checkout-dialog';
@@ -21,7 +20,7 @@ import { CheckoutDialog } from '../checkout-dialog/checkout-dialog';
         <mat-progress-spinner diameter="24" mode="indeterminate"></mat-progress-spinner>
       } @else if (currentCheckout(); as checkout) {
         <p>
-          Checked out by <strong>{{ holderName(checkout.user_id) }}</strong>
+          Checked out by <strong>{{ checkout.holder_display_name }}</strong>
           @if (checkout.team_context) {
             for <strong>{{ checkout.team_context }}</strong>
           }
@@ -47,7 +46,7 @@ import { CheckoutDialog } from '../checkout-dialog/checkout-dialog';
         <ul class="history-list">
           @for (entry of pastCheckouts(); track entry.id) {
             <li>
-              {{ holderName(entry.user_id) }}
+              {{ entry.holder_display_name }}
               @if (entry.team_context) {
                 — {{ entry.team_context }}
               }
@@ -80,7 +79,6 @@ export class CheckoutSection {
   readonly bitzaId = input.required<string>();
 
   private readonly checkoutService = inject(CheckoutService);
-  private readonly userService = inject(UserService);
   private readonly dialog = inject(MatDialog);
 
   private readonly reload = signal(0);
@@ -107,34 +105,6 @@ export class CheckoutSection {
   protected readonly pastCheckouts = computed(() =>
     this.history().filter((entry) => entry.checked_in_at !== null),
   );
-
-  private readonly userNames = toSignal(
-    toObservable(this.history).pipe(
-      switchMap((entries) => {
-        const ids = [...new Set(entries.map((entry) => entry.user_id))];
-        if (ids.length === 0) {
-          return of(new Map<string, string>());
-        }
-        return forkJoin(
-          ids.map((id) => this.userService.get(id).pipe(catchError(() => of(null)))),
-        ).pipe(
-          map(
-            (users) =>
-              new Map(
-                users
-                  .filter((user): user is NonNullable<typeof user> => user !== null)
-                  .map((user) => [user.id, user.username]),
-              ),
-          ),
-        );
-      }),
-    ),
-    { initialValue: new Map<string, string>() },
-  );
-
-  protected holderName(userId: string): string {
-    return this.userNames().get(userId) ?? userId;
-  }
 
   protected onCheckout(): void {
     const dialogRef = this.dialog.open(CheckoutDialog, { width: '420px' });

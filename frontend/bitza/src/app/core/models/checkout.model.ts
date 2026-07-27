@@ -6,7 +6,8 @@
 export interface Checkout {
   id: string;
   bitza_id: string;
-  user_id: string;
+  holder_id: string | null;
+  holder_display_name: string;
   /** Free-text snapshot, not a live FK — safe even if the team is deleted later. */
   team_context: string | null;
   note: string | null;

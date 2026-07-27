@@ -27,7 +27,8 @@ describe('CheckoutService', () => {
     req.flush({
       id: 'c1',
       bitza_id: 'b1',
-      user_id: 'u1',
+      holder_id: 'u1',
+      holder_display_name: 'Sam Smith',
       team_context: null,
       note: 'for the comp',
       checked_out_at: '2026-01-01T00:00:00Z',
@@ -44,7 +45,8 @@ describe('CheckoutService', () => {
     req.flush({
       id: 'c1',
       bitza_id: 'b1',
-      user_id: 'u1',
+      holder_id: 'u1',
+      holder_display_name: 'Sam Smith',
       team_context: null,
       note: null,
       checked_out_at: '2026-01-01T00:00:00Z',
