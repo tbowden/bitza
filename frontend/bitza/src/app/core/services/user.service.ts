@@ -2,7 +2,7 @@ import { HttpClient } from '@angular/common/http';
 import { Service, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import { environment } from '../../../environments/environment';
-import { AdminUserUpdate, User, UserCreate, UserDirectoryEntry, UserUpdate } from '../models';
+import { AdminUserUpdate, User, UserCreate, UserDirectoryEntry, UserSelfUpdate } from '../models';
 
 /**
  * Covers /users/me (open to any authenticated user), the admin/superuser-
@@ -20,7 +20,7 @@ export class UserService {
     return this.http.get<User>(`${this.baseUrl}/me`);
   }
 
-  updateMe(update: UserUpdate): Observable<User> {
+  updateMe(update: UserSelfUpdate): Observable<User> {
     return this.http.patch<User>(`${this.baseUrl}/me`, update);
   }
 

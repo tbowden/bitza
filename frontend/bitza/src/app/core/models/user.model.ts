@@ -33,11 +33,24 @@ export interface UserDirectoryEntry {
   display_name: string;
 }
 
-/** Payload for PATCH /users/me and admin-gated user edits. */
-export interface UserUpdate {
-  email?: string;
-  username?: string;
-  password?: string;
+/**
+ * Payload for PATCH /users/me — matches backend `UserSelfUpdate` exactly
+ * (renamed from `UserUpdate` to match: confusingly, the backend's own
+ * `UserUpdate` schema is the *admin*-facing one — see `AdminUserUpdate`
+ * below). Self-service only: a user may change their own display_name
+ * and/or password, nothing else — email/username/role are admin-gated
+ * fields a user cannot change on themselves via this endpoint.
+ *
+ * Not currently wired to any component (no profile-editing screen exists
+ * yet), so this was never a live bug — just a model that didn't match
+ * anything the backend actually accepts, corrected for whenever that
+ * screen gets built.
+ */
+export interface UserSelfUpdate {
+  display_name?: string;
+  /** Required if new_password is set — the backend rejects one without the other. */
+  current_password?: string;
+  new_password?: string;
 }
 
 /**
