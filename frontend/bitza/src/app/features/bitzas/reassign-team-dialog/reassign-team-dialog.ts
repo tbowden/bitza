@@ -8,7 +8,7 @@ import { MatSelectModule } from '@angular/material/select';
 import { catchError, of } from 'rxjs';
 import { AppConfigService } from '../../../core/services/app-config.service';
 import { TeamService } from '../../../core/services/team.service';
-import { BitzaKind, CascadeScope, Team } from '../../../core/models';
+import { BitzaKind, CascadeScope, TeamListItem } from '../../../core/models';
 
 export interface ReassignTeamDialogData {
   kind: BitzaKind;
@@ -90,7 +90,7 @@ export class ReassignTeamDialog {
   private readonly teamService = inject(TeamService);
 
   protected readonly teams = toSignal(
-    this.teamService.list().pipe(catchError(() => of<Team[]>([]))),
+    this.teamService.list().pipe(catchError(() => of<TeamListItem[]>([]))),
     { initialValue: [] },
   );
 

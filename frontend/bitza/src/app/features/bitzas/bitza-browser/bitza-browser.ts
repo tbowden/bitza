@@ -26,7 +26,7 @@ import {
   BitzaListParams,
   BitzaStatus,
   Category,
-  Team,
+  TeamListItem,
 } from '../../../core/models';
 import { ConfirmDialog, ConfirmDialogData } from '../../../shared/confirm-dialog/confirm-dialog';
 import {
@@ -396,7 +396,7 @@ export class BitzaBrowser {
   private readonly filtersBundle$ = toObservable(this.filtersBundle);
 
   protected readonly teams = toSignal(
-    this.teamService.list().pipe(catchError(() => of<Team[]>([]))),
+    this.teamService.list().pipe(catchError(() => of<TeamListItem[]>([]))),
     { initialValue: [] },
   );
 

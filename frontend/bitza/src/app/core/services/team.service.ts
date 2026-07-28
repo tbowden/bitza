@@ -2,7 +2,14 @@ import { HttpClient, HttpParams } from '@angular/common/http';
 import { Service, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import { environment } from '../../../environments/environment';
-import { Team, TeamCreate, TeamMember, TeamMemberCreate, TeamUpdate } from '../models';
+import {
+  Team,
+  TeamCreate,
+  TeamListItem,
+  TeamMember,
+  TeamMemberCreate,
+  TeamUpdate,
+} from '../models';
 
 @Service()
 export class TeamService {
@@ -10,9 +17,9 @@ export class TeamService {
   private readonly baseUrl = `${environment.apiUrl}/teams`;
 
   /** Omit userId for every team; pass it to filter to one user's teams. */
-  list(userId?: string): Observable<Team[]> {
+  list(userId?: string): Observable<TeamListItem[]> {
     const params = userId ? new HttpParams().set('user_id', userId) : undefined;
-    return this.http.get<Team[]>(`${this.baseUrl}/`, { params });
+    return this.http.get<TeamListItem[]>(`${this.baseUrl}/`, { params });
   }
 
   get(id: string): Observable<Team> {

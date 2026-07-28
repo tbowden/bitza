@@ -19,7 +19,7 @@ import {
   Category,
   FuzzyState,
   StockMode,
-  Team,
+  TeamListItem,
 } from '../../../core/models';
 
 export interface BitzaFormDialogData {
@@ -223,7 +223,7 @@ export class BitzaFormDialog {
   protected readonly isEdit = !!this.data?.bitza;
 
   protected readonly teams = toSignal(
-    this.teamService.list().pipe(catchError(() => of<Team[]>([]))),
+    this.teamService.list().pipe(catchError(() => of<TeamListItem[]>([]))),
     {
       initialValue: [],
     },

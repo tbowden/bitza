@@ -11,7 +11,7 @@ import { catchError, of, switchMap } from 'rxjs';
 import { AppConfigService } from '../../../core/services/app-config.service';
 import { AuthService } from '../../../core/services/auth.service';
 import { TeamService } from '../../../core/services/team.service';
-import { Team } from '../../../core/models';
+import { TeamListItem } from '../../../core/models';
 import { TeamFormDialog, TeamFormResult } from '../team-form-dialog/team-form-dialog';
 
 @Component({
@@ -63,8 +63,10 @@ import { TeamFormDialog, TeamFormResult } from '../team-form-dialog/team-form-di
                 ><h2>{{ team.name }}</h2></mat-card-title
               >
             </mat-card-header>
-            @if (team.description) {
-              <mat-card-content>{{ team.description }}</mat-card-content>
+            @if (team.member_count > 0) {
+              <mat-card-content
+                >{{ team.member_count }} member{{ team.member_count === 1 ? '' : 's' }}</mat-card-content
+              >
             }
           </mat-card>
         }
@@ -127,7 +129,7 @@ export class TeamsList {
         this.teamService.list().pipe(
           catchError(() => {
             this.loadErrorSignal.set(true);
-            return of<Team[]>([]);
+            return of<TeamListItem[]>([]);
           }),
         ),
       ),
@@ -140,9 +142,9 @@ export class TeamsList {
       switchMap(() => {
         const userId = this.authService.currentUser()?.id;
         if (!userId) {
-          return of<Team[]>([]);
+          return of<TeamListItem[]>([]);
         }
-        return this.teamService.list(userId).pipe(catchError(() => of<Team[]>([])));
+        return this.teamService.list(userId).pipe(catchError(() => of<TeamListItem[]>([])));
       }),
     ),
     { initialValue: undefined },

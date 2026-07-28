@@ -6,7 +6,22 @@ export interface Team {
   id: string;
   name: string;
   description?: string | null;
+  /** Populated by the service. */
+  member_count: number;
   created_at: string;
+}
+
+/**
+ * The compact shape GET /teams/ actually returns (`TeamListRead`) — no
+ * description or created_at at all, unlike `Team` (`TeamRead`, from
+ * GET /teams/{id}). TeamService.list() used to be typed as Team[],
+ * which claimed a description field the list endpoint never returns —
+ * see teams-list.ts, where that silently broke the card description.
+ */
+export interface TeamListItem {
+  id: string;
+  name: string;
+  member_count: number;
 }
 
 export interface TeamCreate {
@@ -25,6 +40,8 @@ export interface TeamUpdate {
  * it only pre-fills `team_context` at checkout time.
  */
 export interface TeamMember {
+  /** The membership row's own id — distinct from user_id/team_id. Not currently used for routing (mutations key off user_id — see TeamService). */
+  id: string;
   user_id: string;
   team_id: string;
   is_primary: boolean;

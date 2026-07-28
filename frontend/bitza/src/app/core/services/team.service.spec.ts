@@ -24,7 +24,7 @@ describe('TeamService', () => {
     const req = httpMock.expectOne(`${environment.apiUrl}/teams/`);
     expect(req.request.method).toBe('GET');
     expect(req.request.params.keys().length).toBe(0);
-    req.flush([{ id: 't1', name: 'Aero', description: null, created_at: '2026-01-01' }]);
+    req.flush([{ id: 't1', name: 'Aero', member_count: 3 }]);
     const result = await promise;
     expect(result[0].name).toBe('Aero');
   });
@@ -43,7 +43,13 @@ describe('TeamService', () => {
     const req = httpMock.expectOne(`${environment.apiUrl}/teams/`);
     expect(req.request.method).toBe('POST');
     expect(req.request.body).toEqual({ name: 'Battery', description: 'cells' });
-    req.flush({ id: 't2', name: 'Battery', description: 'cells', created_at: '2026-01-01' });
+    req.flush({
+      id: 't2',
+      name: 'Battery',
+      description: 'cells',
+      member_count: 0,
+      created_at: '2026-01-01',
+    });
     await promise;
   });
 
@@ -60,7 +66,13 @@ describe('TeamService', () => {
     const req = httpMock.expectOne(`${environment.apiUrl}/teams/t1/members`);
     expect(req.request.method).toBe('POST');
     expect(req.request.body).toEqual({ user_id: 'u1', is_primary: true });
-    req.flush({ user_id: 'u1', team_id: 't1', is_primary: true });
+    req.flush({
+      id: 'm1',
+      user_id: 'u1',
+      team_id: 't1',
+      is_primary: true,
+      user_display_name: 'Sam Smith',
+    });
     await promise;
   });
 
@@ -69,7 +81,13 @@ describe('TeamService', () => {
     const req = httpMock.expectOne(`${environment.apiUrl}/teams/t1/members/u1`);
     expect(req.request.method).toBe('PATCH');
     expect(req.request.body).toEqual({ is_primary: false });
-    req.flush({ user_id: 'u1', team_id: 't1', is_primary: false });
+    req.flush({
+      id: 'm1',
+      user_id: 'u1',
+      team_id: 't1',
+      is_primary: false,
+      user_display_name: 'Sam Smith',
+    });
     await promise;
   });
 
