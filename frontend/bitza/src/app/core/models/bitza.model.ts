@@ -175,10 +175,13 @@ export interface BitzaListParams {
   retired_reason?: RetiredReason;
 }
 
+/** Matches backend BitzaImageRead exactly — there is no filename field. */
 export interface BitzaImage {
   id: string;
   bitza_id: string;
   is_primary: boolean;
-  filename: string;
-  created_at: string;
+  uploaded_by: string | null;
+  /** Populated by the service. */
+  uploaded_by_display_name: string;
+  uploaded_at: string;
 }

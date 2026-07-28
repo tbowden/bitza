@@ -32,8 +32,9 @@ describe('ImageService', () => {
       id: 'i1',
       bitza_id: 'b1',
       is_primary: true,
-      filename: 'photo.png',
-      created_at: '2026-01-01',
+      uploaded_by: 'u1',
+      uploaded_by_display_name: 'Sam Smith',
+      uploaded_at: '2026-01-01',
     });
     await promise;
   });
@@ -55,8 +56,9 @@ describe('ImageService', () => {
       id: 'i1',
       bitza_id: 'b1',
       is_primary: true,
-      filename: 'photo.png',
-      created_at: '2026-01-01',
+      uploaded_by: 'u1',
+      uploaded_by_display_name: 'Sam Smith',
+      uploaded_at: '2026-01-01',
     });
     await promise;
   });
