@@ -76,10 +76,11 @@ uv run alembic upgrade head
 
 This creates `data/dev.db`.
 
-### 5. Create the superuser
+### 5. Create the superuser and root bitza
 
 ```bash
 uv run python -m app.cli create-superuser
+uv run python -m app.cli create-root
 ```
 
 You will be prompted for email, username, display name, and password.
