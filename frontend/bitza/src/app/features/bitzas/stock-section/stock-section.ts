@@ -30,11 +30,11 @@ import {
         <ul class="history-list">
           @for (entry of history(); track entry.id) {
             <li>
-              {{ entry.delta > 0 ? '+' : '' }}{{ entry.delta }}
+              {{ entry.delta > 0 ? '+' : '' }}{{ entry.delta }} → {{ entry.quantity_after }}
               @if (entry.note) {
                 — {{ entry.note }}
               }
-              ({{ entry.created_at | date: 'short' }})
+              — {{ entry.user_display_name }} ({{ entry.created_at | date: 'short' }})
             </li>
           }
         </ul>

@@ -6,8 +6,12 @@ export interface StockLog {
   id: string;
   bitza_id: string;
   delta: number;
+  /** The resulting quantity after this adjustment was applied. */
+  quantity_after: number;
   note: string | null;
-  user_id: string;
+  user_id: string | null;
+  /** Populated by the service. */
+  user_display_name: string;
   created_at: string;
 }
 

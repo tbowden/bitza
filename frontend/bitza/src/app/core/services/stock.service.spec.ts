@@ -28,8 +28,10 @@ describe('StockService', () => {
       id: 's1',
       bitza_id: 'b1',
       delta: 10,
+      quantity_after: 25,
       note: 'restock',
       user_id: 'u1',
+      user_display_name: 'Sam Smith',
       created_at: '2026-01-01',
     });
     await promise;
@@ -43,8 +45,10 @@ describe('StockService', () => {
       id: 's2',
       bitza_id: 'b1',
       delta: -3,
+      quantity_after: 22,
       note: null,
       user_id: 'u1',
+      user_display_name: 'Sam Smith',
       created_at: '2026-01-01',
     });
     await promise;
