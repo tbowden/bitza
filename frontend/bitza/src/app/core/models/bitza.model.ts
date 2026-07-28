@@ -151,6 +151,19 @@ export interface BitzaReassignTeamRequest {
   cascade_scope: CascadeScope;
 }
 
+/**
+ * POST /bitzas/{id}/reassign-team's actual response — previously
+ * discarded entirely (the service typed this call as returning void).
+ * updated_count matters most for all_descendants: it's the only
+ * confirmation of how many rows the cascade actually touched.
+ */
+export interface ReassignTeamResponse {
+  bitza_id: string;
+  team_id: string;
+  cascade_scope: CascadeScope;
+  updated_count: number;
+}
+
 /** Query params for GET /bitzas/ — see "Listing and filtering". */
 export interface BitzaListParams {
   parent_id?: string;

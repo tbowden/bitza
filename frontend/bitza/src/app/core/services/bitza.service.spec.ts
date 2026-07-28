@@ -64,8 +64,14 @@ describe('BitzaService', () => {
     const req = httpMock.expectOne(`${environment.apiUrl}/bitzas/b1/reassign-team`);
     expect(req.request.method).toBe('POST');
     expect(req.request.body).toEqual({ team_id: 't2', cascade_scope: 'all_descendants' });
-    req.flush(null);
-    await promise;
+    req.flush({
+      bitza_id: 'b1',
+      team_id: 't2',
+      cascade_scope: 'all_descendants',
+      updated_count: 5,
+    });
+    const result = await promise;
+    expect(result.updated_count).toBe(5);
   });
 
   it('hard-deletes via DELETE', async () => {

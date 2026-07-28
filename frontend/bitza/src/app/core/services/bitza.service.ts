@@ -10,6 +10,7 @@ import {
   BitzaReassignTeamRequest,
   BitzaRetireRequest,
   BitzaUpdate,
+  ReassignTeamResponse,
 } from '../models';
 
 @Service()
@@ -62,8 +63,11 @@ export class BitzaService {
    * default shown in a picker is frontend UX only. See
    * "Reassigning responsible team" in bitza_project_context.md.
    */
-  reassignTeam(id: string, request: BitzaReassignTeamRequest): Observable<void> {
-    return this.http.post<void>(`${this.baseUrl}/${id}/reassign-team`, request);
+  reassignTeam(
+    id: string,
+    request: BitzaReassignTeamRequest,
+  ): Observable<ReassignTeamResponse> {
+    return this.http.post<ReassignTeamResponse>(`${this.baseUrl}/${id}/reassign-team`, request);
   }
 
   /** Admin/superuser only; 409 if the bitza still has children. */

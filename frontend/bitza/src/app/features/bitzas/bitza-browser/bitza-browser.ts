@@ -548,7 +548,15 @@ export class BitzaBrowser {
       }
       this.bitzaService
         .reassignTeam(bitza.id, { team_id: result.teamId, cascade_scope: result.cascadeScope })
-        .subscribe(() => this.reload.update((n) => n + 1));
+        .subscribe((response) => {
+          this.reload.update((n) => n + 1);
+          const count = response.updated_count;
+          this.snackBar.open(
+            `Reassigned ${count} ${count === 1 ? 'bitza' : 'bitzas'}.`,
+            'Dismiss',
+            { duration: 4000 },
+          );
+        });
     });
   }
 
