@@ -74,6 +74,7 @@ import { CategoryService } from '../../../core/services/category.service';
                   </button>
                 } @else {
                   <span class="category-name">{{ category.name }}</span>
+                  <span class="category-count">{{ category.bitza_count }}</span>
                   <button
                     mat-icon-button
                     type="button"
@@ -126,6 +127,11 @@ import { CategoryService } from '../../../core/services/category.service';
 
     .category-name {
       flex: 1;
+    }
+
+    .category-count {
+      font-size: 0.8125rem;
+      color: var(--mat-sys-on-surface-variant);
     }
   `,
 })
