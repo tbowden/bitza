@@ -7,7 +7,7 @@ import { MatListModule } from '@angular/material/list';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { catchError, of, switchMap } from 'rxjs';
 import { BitzaService } from '../../../core/services/bitza.service';
-import { Bitza } from '../../../core/models';
+import { Bitza, BitzaListItem } from '../../../core/models';
 
 export interface MoveBitzaDialogData {
   bitza: Bitza;
@@ -148,7 +148,9 @@ export class MoveBitzaDialog {
         if (!id) {
           return of(undefined);
         }
-        return this.bitzaService.list({ parent_id: id }).pipe(catchError(() => of<Bitza[]>([])));
+        return this.bitzaService
+          .list({ parent_id: id })
+          .pipe(catchError(() => of<BitzaListItem[]>([])));
       }),
     ),
     { initialValue: undefined },
@@ -161,7 +163,7 @@ export class MoveBitzaDialog {
     // Seed the picker at the tree root.
     this.bitzaService
       .list({ root_only: true })
-      .pipe(catchError(() => of<Bitza[]>([])))
+      .pipe(catchError(() => of<BitzaListItem[]>([])))
       .subscribe((roots) => {
         if (roots.length > 0) {
           this.pathStack.set([{ id: roots[0].id, name: roots[0].name }]);
@@ -169,7 +171,7 @@ export class MoveBitzaDialog {
       });
   }
 
-  protected drillInto(child: Bitza): void {
+  protected drillInto(child: BitzaListItem): void {
     this.pathStack.update((stack) => [...stack, { id: child.id, name: child.name }]);
   }
 

@@ -24,7 +24,11 @@ export interface Bitza {
   name: string;
   kind: BitzaKind;
   parent_id: string | null;
+  /** Populated by the service — null only for the root bitza. */
+  parent_name: string | null;
   responsible_team_id: string;
+  /** Populated by the service. */
+  responsible_team_name: string;
   status: BitzaStatus;
   /**
    * True for exactly one bitza system-wide — the tree's single, permanent
@@ -35,22 +39,67 @@ export interface Bitza {
   is_root: boolean;
   retired_reason: RetiredReason | null;
   retired_note: string | null;
+  retired_at: string | null;
+  retired_by_user_id: string | null;
+  /** Populated by the service. */
+  retired_by_display_name: string | null;
   category_id: string | null;
+  /** Populated by the service. */
+  category_name: string | null;
+  tags: string[] | null;
   description?: string | null;
+
+  /** Number of direct children — populated by the service. */
+  child_count: number;
 
   // stock (kind = 'stock') only
   stock_mode?: StockMode | null;
   quantity?: number | null;
+  low_stock_threshold?: number | null;
   fuzzy_state?: FuzzyState | null;
 
   // acquisition / provenance
   purchased_by_user_id?: string | null;
+  /** Populated by the service. */
+  purchased_by_display_name: string;
   vendor?: string | null;
   purchase_date?: string | null;
   order_url?: string | null;
 
+  /**
+   * kind = 'mobile' only — derived from the newest Checkout row with
+   * checked_in_at === null, never a stored flag. See Checkout.model.ts.
+   */
+  is_checked_out: boolean;
+  /** Populated by the service. */
+  current_holder_display_name: string | null;
+
   created_at: string;
   updated_at: string;
+}
+
+/**
+ * The compact shape GET /bitzas/ (list/browse) actually returns
+ * (`BitzaListRead`) — distinct from `Bitza` (`BitzaRead`, the full
+ * detail shape from GET /bitzas/{id}). The backend deliberately sends
+ * less data for list views; `BitzaService.list()` used to be typed as
+ * returning `Bitza[]`, which claimed fields (description, vendor, tags,
+ * etc.) that were never actually present in that response.
+ */
+export interface BitzaListItem {
+  id: string;
+  name: string;
+  kind: BitzaKind;
+  parent_id: string | null;
+  parent_name: string | null;
+  responsible_team_name: string;
+  category_name: string | null;
+  status: BitzaStatus;
+  quantity: number | null;
+  fuzzy_state: FuzzyState | null;
+  is_checked_out: boolean;
+  child_count: number;
+  is_root: boolean;
 }
 
 export interface BitzaCreate {
@@ -65,9 +114,12 @@ export interface BitzaCreate {
   responsible_team_id: string;
   category_id?: string | null;
   description?: string | null;
+  tags?: string[];
   stock_mode?: StockMode;
   /** Required by the backend when stock_mode = 'exact'; forbidden otherwise. */
   quantity?: number;
+  /** Only meaningful when stock_mode = 'exact'; forbidden when 'fuzzy'. */
+  low_stock_threshold?: number;
   fuzzy_state?: FuzzyState;
   purchased_by_user_id?: string;
   vendor?: string;
@@ -81,6 +133,8 @@ export interface BitzaUpdate {
   responsible_team_id?: string;
   category_id?: string | null;
   description?: string | null;
+  tags?: string[];
+  low_stock_threshold?: number;
   fuzzy_state?: FuzzyState;
   vendor?: string;
   purchase_date?: string;

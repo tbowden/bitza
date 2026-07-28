@@ -5,6 +5,7 @@ import { environment } from '../../../environments/environment';
 import {
   Bitza,
   BitzaCreate,
+  BitzaListItem,
   BitzaListParams,
   BitzaReassignTeamRequest,
   BitzaRetireRequest,
@@ -21,15 +22,19 @@ export class BitzaService {
    * "Direct-children-only reads" in bitza_project_context.md. Building a
    * "show everything nested here" view means issuing repeated calls from
    * here, not asking the backend to walk the tree.
+   *
+   * Returns the compact BitzaListRead shape, not full Bitza (BitzaRead)
+   * — this used to be typed as Bitza[], which claimed fields (description,
+   * vendor, tags, etc.) the list endpoint never actually returns.
    */
-  list(params: BitzaListParams = {}): Observable<Bitza[]> {
+  list(params: BitzaListParams = {}): Observable<BitzaListItem[]> {
     let httpParams = new HttpParams();
     for (const [key, value] of Object.entries(params)) {
       if (value !== undefined && value !== null) {
         httpParams = httpParams.set(key, String(value));
       }
     }
-    return this.http.get<Bitza[]>(`${this.baseUrl}/`, { params: httpParams });
+    return this.http.get<BitzaListItem[]>(`${this.baseUrl}/`, { params: httpParams });
   }
 
   get(id: string): Observable<Bitza> {

@@ -22,6 +22,7 @@ import { TeamService } from '../../../core/services/team.service';
 import {
   Bitza,
   BitzaKind,
+  BitzaListItem,
   BitzaListParams,
   BitzaStatus,
   Category,
@@ -109,10 +110,10 @@ import { ImageGallery } from '../image-gallery/image-gallery';
             }
             <p>
               {{ config.teamLabelSingular() }} responsible:
-              <strong>{{ teamName(bitza.responsible_team_id) }}</strong>
+              <strong>{{ bitza.responsible_team_name }}</strong>
             </p>
             @if (bitza.category_id) {
-              <p>Category: {{ categoryName(bitza.category_id) }}</p>
+              <p>Category: {{ bitza.category_name }}</p>
             }
             @if (bitza.kind === 'stock') {
               <p>
@@ -264,7 +265,7 @@ import { ImageGallery } from '../image-gallery/image-gallery';
             <th mat-header-cell *matHeaderCellDef>Stock</th>
             <td mat-cell *matCellDef="let child">
               @if (child.kind === 'stock') {
-                {{ child.stock_mode === 'exact' ? (child.quantity ?? 0) : child.fuzzy_state }}
+                {{ child.quantity ?? child.fuzzy_state }}
               }
             </td>
           </ng-container>
@@ -440,7 +441,7 @@ export class BitzaBrowser {
         } else {
           params.root_only = true;
         }
-        return this.bitzaService.list(params).pipe(catchError(() => of<Bitza[]>([])));
+        return this.bitzaService.list(params).pipe(catchError(() => of<BitzaListItem[]>([])));
       }),
     ),
     { initialValue: undefined },
@@ -455,14 +456,6 @@ export class BitzaBrowser {
       toArray(),
       map((chain) => chain.reverse()),
     );
-  }
-
-  protected teamName(teamId: string): string {
-    return this.teams().find((team) => team.id === teamId)?.name ?? teamId;
-  }
-
-  protected categoryName(categoryId: string): string {
-    return this.categories().find((category) => category.id === categoryId)?.name ?? '';
   }
 
   protected openBitza(id: string): void {
