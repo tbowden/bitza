@@ -18,6 +18,13 @@ export interface User {
    */
   is_active: boolean;
   created_at: string;
+  /**
+   * Present on UserRead (GET /me, GET /{id}, create, update) but not on
+   * the compact UserListRead that list() returns — same list/detail
+   * split as Bitza and Team, just for this one field, so marked optional
+   * here rather than introducing a separate list-item type for it alone.
+   */
+  updated_at?: string;
 }
 
 /**
