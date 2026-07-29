@@ -34,7 +34,8 @@ the same schema. Backend: FastAPI + SQLite. Frontend: Angular 22 + Angular Mater
 |---|---|---|
 | **1** | Auth, users, roles (superuser/admin/user), JWT refresh/rotation, password policy | ✅ Done, tested, untouched since |
 | **2** | Unified `Team`/`Bitza` backend model | ✅ Done, tested (58/58 passing) |
-| **3** | Angular frontend | 🟡 All 5 planned milestones built (Foundation, Teams, Bitzas core, Bitza actions, Admin & polish) — see caveats below before treating this as "done" |
+| **3** | Angular frontend | 🟡 All 5 planned milestones built (Foundation, Teams, Bitzas core, Bitza actions, Admin & polish) — see caveats below; the frontend/backend schema-drift caveat that used to be here is now resolved (see Stage 4) |
+| **4** | Frontend/backend schema reconciliation + completeness pass | ✅ Done — 16 patches (`bitza_schema_reconciliation_todo.md`), applied and pushed. Two new, undecided design questions came out of it (a personal `/me` landing page, `kind` editability/labelling) — not started, see that doc's "New design questions raised" section |
 
 **Stage 3 caveats — read before continuing frontend work:**
 
@@ -51,20 +52,24 @@ the same schema. Backend: FastAPI + SQLite. Frontend: Angular 22 + Angular Mater
   reading Material's compiled source (not by running a checker) — see
   `bitza_frontend_context.md` for specifics. Treat the current state as
   "meaningfully better than default, not verified compliant."
-- **The frontend's data models have confirmed drift from the real
-  backend schemas — likely breaking several already-shipped features.**
-  This was found by reading `backend/app/schemas/*.py` directly, not
-  by observing a failure (this project has never had a live
-  click-through against a running backend). At minimum: creating a
-  user, suspend/unsuspend, checkout holder display, team member names,
-  and audit log summaries are each likely non-functional right now due
-  to field-name or polarity mismatches, not just missing nice-to-haves.
-  **See `bitza_schema_reconciliation_todo.md` — read this before doing
-  any further work on Users, Teams, Checkout, or the Audit Log.**
-  Separately, `GET /api/v1/users/`'s actual permission behavior (open
-  reads vs. admin-gated, as the docs literally state) is still an open
-  question, not covered by that doc — see
-  `bitza_frontend_context.md`'s schema-drift section for that one.
+- **The frontend's data models had confirmed drift from the real backend
+  schemas, breaking several already-shipped features — this is now
+  resolved (Stage 4 above).** Found by reading `backend/app/schemas/*.py`
+  directly, not by observing a failure (this project still has never had
+  a live click-through against a running backend). Creating a user,
+  suspend/unsuspend, checkout holder display, team member names, and
+  audit log summaries were all confirmed non-functional due to
+  field-name or polarity mismatches, plus two more live bugs found
+  during the completeness pass (exact-mode stock quantities and team
+  descriptions both silently failing to display). All fixed — 16
+  patches, see `bitza_schema_reconciliation_todo.md` for the full
+  history. The `GET /api/v1/users/` permission question is resolved too
+  (it's genuinely admin-gated; fixed via a new, narrower
+  `/users/directory` endpoint rather than relaxing that gate).
+  **Two new design questions came out of this work and are not yet
+  decided or built — a personal `/me` landing page, and `kind`
+  editability/labelling — see that same doc's "New design questions
+  raised" section before starting new frontend work.**
 - **Component templates/styles are inconsistent.** Milestones 1–4 use
   inline `template`/`styles`; Milestone 5 (Users, Audit) uses external
   `.html`/`.scss` files, which is now the stated convention going forward

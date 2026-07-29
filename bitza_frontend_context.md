@@ -196,44 +196,50 @@ Angular version bumps and something stops working.
 
 ---
 
-## Schema drift between frontend models and the live backend — see dedicated doc
+## Schema drift between frontend models and the live backend — resolved
 
-**`bitza_schema_reconciliation_todo.md` is the authoritative, current
-account of this** — read it before touching Users, Teams, Checkout, or
-Audit Log. Short version: the frontend was built from
-`bitza_project_context.md`'s prose description of the API, and in
-several places that description (and therefore the frontend) has
-drifted from what the backend's actual Pydantic schemas define. This
-was discovered by reading `backend/app/schemas/*.py` directly, not by
-observing a failure — this project has never had a live click-through
-against a running backend (see "Stage 3 caveats" above).
+**This is done.** `bitza_schema_reconciliation_todo.md` has the full
+history — 16 patches (`0001`–`0016`), applied and pushed. Short version
+of what happened: the frontend was built from `bitza_project_context.md`'s
+prose description of the API, and in several places that description
+(and therefore the frontend) had drifted from what the backend's actual
+Pydantic schemas define. That was found by reading `backend/app/schemas/*.py`
+directly, not by observing a failure — this project still has never had
+a live click-through against a running backend (see "Stage 3 caveats"
+above, which still applies).
 
-At minimum, five things are likely completely non-functional right now:
+Five things were confirmed completely non-functional and are now fixed:
 creating a user (missing required `display_name`), suspend/unsuspend
-(backend uses `is_active` — opposite polarity from the frontend's
+(backend uses `is_active` — opposite polarity from the frontend's old
 `is_suspended`), checkout holder display (`holder_id` vs `user_id`),
 team member names (`user_display_name` vs assumed `username`/`email`),
-and audit log summaries (`description` vs `summary`). The reconciliation
-doc has exact file/field references for all of these plus a longer list
-of merely-missing-but-harmless fields. Once that work is done, this
-section should be considered resolved and can be trimmed down to
-whatever's still genuinely open.
+and audit log summaries (`description` vs `summary`). A full
+completeness pass on top of that (Bitza, Team, Category, StockLog,
+BitzaImage, and others) surfaced two more real, live bugs along the
+way — exact-mode stock quantities showing blank in the bitza children
+table, and team descriptions never rendering in the teams grid — both
+from the same root cause: list endpoints return a deliberately-compact
+schema, and the frontend had been using one type for both list and
+detail responses, papering over fields the list response never actually
+sent.
 
-The one thing already fully confirmed clean: **Auth** (`schemas/auth.py`)
-matches the frontend exactly — no drift there.
+The one thing already fully confirmed clean throughout: **Auth**
+(`schemas/auth.py`) matches the frontend exactly — no drift there.
 
-Separately, still genuinely open (not covered by the reconciliation doc,
-since it's a permissions question rather than a shape question):
+**The `GET /api/v1/users/` permission question is resolved too** — it's
+genuinely, deliberately admin/superuser-gated (confirmed by a passing
+backend test), which broke the team-member-add picker for any
+non-admin user. Fixed by adding a new `GET /users/directory` endpoint
+(any authenticated user, id + display_name only — no email/role/
+is_active) rather than relaxing the existing gate or restricting
+add-member to admins. See `bitza_schema_reconciliation_todo.md` for the
+full reasoning.
 
-- **`GET /api/v1/users/`** — the docs say the `/users/` directory is
-  admin/superuser-gated, but the Team/Bitza trust model requires any
-  user to be able to add any other user to any team, which needs some
-  way to browse/look up users. The frontend calls `GET /users/` as the
-  natural read for both the team-member-add picker (Milestone 2) *and*
-  the admin users list (Milestone 5) — for the latter it's genuinely
-  meant to be gated, so this probably needs to resolve as "list reads
-  are open, only mutations are gated," but that's a guess. **Check this
-  against the actual backend before relying on either UI flow.**
+**Two new, undecided design questions came out of this work** — a
+personal `/me` landing page, and whether `kind` should become editable
+(and relabelled "Type") — both written up in
+`bitza_schema_reconciliation_todo.md`'s "New design questions raised"
+section. Neither is implemented.
 
 ---
 
@@ -270,9 +276,11 @@ a process risk rather than a one-off mistake:
 
 ## Testing state
 
-- **35 unit tests across 10 spec files**, all at the service layer
+- **39 unit tests across 11 spec files**, all at the service layer
   (`core/services/*.spec.ts`), using `HttpTestingController` to assert on
-  request method/URL/body/params — not component tests.
+  request method/URL/body/params — not component tests. (Grew from the
+  original 35/10 during the schema-reconciliation work — see
+  `bitza_schema_reconciliation_todo.md`.)
 - **No component-level tests exist.** Nothing exercises a component's
   template, user interactions, or rendered output.
 - **No e2e tests.**
@@ -307,7 +315,12 @@ plus a few frontend-specific scope cuts made along the way:
   authenticated-blob-fetch-per-row cost; detail-view-only for now.
 - **Cross-bitza checkout/stock dashboards** ("what's currently checked
   out" across the whole club, "recent stock activity" feed) — nothing in
-  the docs asked for this; only per-bitza history exists.
+  the docs asked for this; only per-bitza history exists. **Partially
+  reconsidered** — a personal (not club-wide) version of "what's checked
+  out" is now requested as part of a `/me` landing page; see
+  `bitza_schema_reconciliation_todo.md`'s "New design questions raised"
+  section. Not built yet, and the "recent activity" half of this cut is
+  still explicitly not decided either way.
 - **Component test suite, e2e suite, real accessibility audit** — see
   Testing state above.
 - **Milestone 1–4 inline-template retrofit** — see Architecture

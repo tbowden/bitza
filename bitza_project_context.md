@@ -264,6 +264,18 @@ bitzas — but note a toolbox could equally be modelled as `mobile` if you
 want to check the *whole box* out as a unit; the model doesn't force a
 choice here, it's just data.
 
+`kind` is currently fixed at creation — the backend's `BitzaUpdate`
+schema deliberately excludes it, on the reasoning that switching kind
+is "a re-creation, not an update" once a bitza has accumulated
+kind-specific history (Checkout rows for `mobile`, StockLog rows for
+`stock`). That reasoning holds, but given the "it's just data, the
+model doesn't force a choice" framing right above, early miscategorising
+is expected — this is flagged as an open design question (conditional
+editability once there's no such history, plus whether "type" reads
+better than "kind" as a label) in
+`bitza_schema_reconciliation_todo.md`'s "New design questions raised"
+section. Not decided or built as of this note.
+
 ### Hierarchy
 
 `parent_id` is a nullable self-referential FK. `NULL` = a root (e.g.
