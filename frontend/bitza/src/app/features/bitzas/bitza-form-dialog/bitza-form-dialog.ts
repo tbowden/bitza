@@ -59,6 +59,11 @@ const KIND_OPTIONS: { value: BitzaKind; label: string }[] = [
   { value: 'stock', label: 'Stock (consumable with quantity)' },
 ];
 
+const STOCK_MODE_LABELS: Record<StockMode, string> = {
+  exact: 'Exact quantity',
+  fuzzy: 'Fuzzy (plentiful / low / empty)',
+};
+
 @Component({
   selector: 'app-bitza-form-dialog',
   imports: [
@@ -123,16 +128,22 @@ const KIND_OPTIONS: { value: BitzaKind; label: string }[] = [
         </mat-form-field>
 
         @if (bitzaForm.kind().value() === 'stock') {
-          <mat-form-field appearance="outline" class="full-width">
-            <mat-label>Stock tracking</mat-label>
-            <mat-select [formField]="bitzaForm.stock_mode">
-              <mat-option value="exact">Exact quantity</mat-option>
-              <mat-option value="fuzzy">Fuzzy (plentiful / low / empty)</mat-option>
-            </mat-select>
-            @if (bitzaForm.stock_mode().touched() && bitzaForm.stock_mode().invalid()) {
-              <mat-error>Choose how this stock is tracked.</mat-error>
-            }
-          </mat-form-field>
+          @if (isEdit) {
+            <p class="stock-mode-readonly">
+              Stock tracking: <strong>{{ stockModeLabel() }}</strong> (fixed at creation)
+            </p>
+          } @else {
+            <mat-form-field appearance="outline" class="full-width">
+              <mat-label>Stock tracking</mat-label>
+              <mat-select [formField]="bitzaForm.stock_mode">
+                <mat-option value="exact">Exact quantity</mat-option>
+                <mat-option value="fuzzy">Fuzzy (plentiful / low / empty)</mat-option>
+              </mat-select>
+              @if (bitzaForm.stock_mode().touched() && bitzaForm.stock_mode().invalid()) {
+                <mat-error>Choose how this stock is tracked.</mat-error>
+              }
+            </mat-form-field>
+          }
 
           @if (bitzaForm.stock_mode().value() === 'fuzzy') {
             <mat-form-field appearance="outline" class="full-width">
@@ -207,6 +218,11 @@ const KIND_OPTIONS: { value: BitzaKind; label: string }[] = [
       margin: 0 0 1rem;
     }
 
+    .stock-mode-readonly {
+      color: var(--mat-sys-on-surface-variant);
+      margin: 0 0 1rem;
+    }
+
     .acquisition-panel {
       margin-top: 0.5rem;
     }
@@ -221,6 +237,18 @@ export class BitzaFormDialog {
 
   protected readonly kindOptions = KIND_OPTIONS;
   protected readonly isEdit = !!this.data?.bitza;
+
+  /**
+   * Read-only label for edit mode — see the stock_mode-inert-during-edit
+   * fix (bitza_schema_reconciliation_todo.md). Always sourced from the
+   * bitza's actual persisted stock_mode, never the (now hidden) form
+   * control, since that control could otherwise be flipped without the
+   * change ever reaching the backend.
+   */
+  protected readonly stockModeLabel = computed(() => {
+    const mode = this.data?.bitza?.stock_mode;
+    return mode ? STOCK_MODE_LABELS[mode] : '';
+  });
 
   protected readonly teams = toSignal(
     this.teamService.list().pipe(catchError(() => of<TeamListItem[]>([]))),

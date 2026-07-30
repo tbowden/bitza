@@ -8,6 +8,7 @@ from app.core.dependencies import get_bitza_service, get_current_user
 from app.models.bitza import BitzaKind, BitzaStatus
 from app.models.user import User
 from app.schemas.bitza import (
+    BitzaAncestorRead,
     BitzaCreate,
     BitzaImageRead,
     BitzaListRead,
@@ -150,6 +151,22 @@ def get_bitza(
     svc: BitzaService = Depends(get_bitza_service),
 ) -> BitzaRead:
     return svc.get_bitza(bitza_id=bitza_id)
+
+
+@bitzas_router.get(
+    "/{bitza_id}/ancestors",
+    response_model=list[BitzaAncestorRead],
+    summary="Ancestor chain for this bitza, nearest parent first",
+)
+def get_bitza_ancestors(
+    bitza_id: str,
+    current_user: User = Depends(get_current_user),
+    svc: BitzaService = Depends(get_bitza_service),
+) -> list[BitzaAncestorRead]:
+    """Powers the frontend breadcrumb in one call instead of walking
+    parent_id one hop at a time. Nearest parent first, root last;
+    excludes the bitza itself. Empty for the root bitza."""
+    return svc.get_ancestors(bitza_id=bitza_id)
 
 
 @bitzas_router.patch(

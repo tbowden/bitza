@@ -25,23 +25,28 @@ BASE_CAT = "/api/v1/categories"
 BASE_AUDIT = "/api/v1/audit"
 
 
-_root_id_cache: dict[int, str] = {}
-
-
 def _root_id(client, token) -> str:
     """
     Lazily resolve the current test's root bitza id via the ordinary
     root_only=true listing (which, now that only one root can ever
-    exist, always returns exactly that one item). Cached per test client
-    instance so repeated helper calls within one test don't re-fetch.
+    exist, always returns exactly that one item). Cached as an attribute
+    on the client instance itself — not a module-level dict keyed by
+    id(client), which caused intermittent "Parent bitza not found"
+    failures: once a prior test's client is garbage-collected, Python
+    can reuse its memory address for a new client on a fresh database,
+    silently returning the previous test's stale root id. An attribute
+    on the object doesn't have that failure mode — a reused address
+    means a genuinely new object without the attribute set, so the
+    cache correctly misses and re-fetches.
     """
-    key = id(client)
-    if key not in _root_id_cache:
+    cached = getattr(client, "_root_id_cache", None)
+    if cached is None:
         resp = client.get(BASE + "/?root_only=true", headers=auth(token))
         roots = resp.json()
         assert roots, "No root bitza found — the root_bitza fixture should have created one"
-        _root_id_cache[key] = roots[0]["id"]
-    return _root_id_cache[key]
+        cached = roots[0]["id"]
+        client._root_id_cache = cached
+    return cached
 
 
 def auth(token: str) -> dict:
@@ -265,6 +270,40 @@ class TestHierarchy:
 
         resp = client.delete(f"{BASE}/{parent['id']}", headers=auth(admin_token))
         assert resp.status_code == 409
+
+
+class TestAncestors:
+    """GET /{bitza_id}/ancestors — exposes BitzaRepository.get_ancestors()
+    (previously used internally only, for update_bitza's cycle-detection
+    check) so the frontend breadcrumb can replace N sequential
+    GET /bitzas/{id} calls with one."""
+
+    def test_ancestors_ordered_nearest_parent_first(
+        self, client: TestClient, user_token: str, default_team: Team
+    ) -> None:
+        root_id = _root_id(client, user_token)
+        grandparent = make_fixed(client, user_token, default_team.id, name="Garage")
+        parent = make_fixed(
+            client, user_token, default_team.id, name="Toolbox", parent_id=grandparent["id"]
+        )
+        child = make_mobile(
+            client, user_token, default_team.id, name="Screwdriver", parent_id=parent["id"]
+        )
+
+        resp = client.get(f"{BASE}/{child['id']}/ancestors", headers=auth(user_token))
+        assert resp.status_code == 200
+        ids = [row["id"] for row in resp.json()]
+        assert ids == [parent["id"], grandparent["id"], root_id]
+
+    def test_ancestors_empty_for_root(self, client: TestClient, user_token: str) -> None:
+        root_id = _root_id(client, user_token)
+        resp = client.get(f"{BASE}/{root_id}/ancestors", headers=auth(user_token))
+        assert resp.status_code == 200
+        assert resp.json() == []
+
+    def test_ancestors_404_for_missing_bitza(self, client: TestClient, user_token: str) -> None:
+        resp = client.get(f"{BASE}/does-not-exist/ancestors", headers=auth(user_token))
+        assert resp.status_code == 404
 
 
 # =========================================================================
@@ -709,6 +748,28 @@ class TestStockAdjustments:
         )
         assert patch_resp.status_code == 200
         assert patch_resp.json()["fuzzy_state"] == "low"
+
+    def test_fuzzy_state_rejected_on_exact_mode_stock(
+        self, client: TestClient, user_token: str, default_team: Team
+    ) -> None:
+        """Guards against exactly the gap the stock_mode-inert-during-edit
+        frontend bug could otherwise exploit: flipping the (now read-only
+        on edit) stock tracking dropdown used to let fuzzy_state slip
+        into the update payload for a bitza that's actually exact-mode."""
+        stock = make_exact_stock(client, user_token, default_team.id, qty=5)
+        patch_resp = client.patch(
+            f"{BASE}/{stock['id']}", json={"fuzzy_state": "low"}, headers=auth(user_token)
+        )
+        assert patch_resp.status_code == 409
+
+    def test_fuzzy_state_rejected_on_non_stock(
+        self, client: TestClient, user_token: str, default_team: Team
+    ) -> None:
+        tool = make_mobile(client, user_token, default_team.id)
+        patch_resp = client.patch(
+            f"{BASE}/{tool['id']}", json={"fuzzy_state": "low"}, headers=auth(user_token)
+        )
+        assert patch_resp.status_code == 409
 
 
 # =========================================================================

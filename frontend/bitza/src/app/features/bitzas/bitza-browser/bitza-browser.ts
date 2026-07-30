@@ -13,7 +13,7 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatSelectModule } from '@angular/material/select';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatTableModule } from '@angular/material/table';
-import { combineLatest, catchError, expand, map, of, switchMap, toArray } from 'rxjs';
+import { combineLatest, catchError, map, of, switchMap } from 'rxjs';
 import { AppConfigService } from '../../../core/services/app-config.service';
 import { AuthService } from '../../../core/services/auth.service';
 import { BitzaService } from '../../../core/services/bitza.service';
@@ -21,6 +21,7 @@ import { CategoryService } from '../../../core/services/category.service';
 import { TeamService } from '../../../core/services/team.service';
 import {
   Bitza,
+  BitzaAncestor,
   BitzaKind,
   BitzaListItem,
   BitzaListParams,
@@ -412,15 +413,19 @@ export class BitzaBrowser {
     combineLatest([this.currentId$, this.reload$]).pipe(
       switchMap(([id]) => {
         if (!id) {
-          return of({ bitza: null as Bitza | null, breadcrumb: [] as Bitza[] });
+          return of({ bitza: null as Bitza | null, breadcrumb: [] as BitzaAncestor[] });
         }
         return this.bitzaService.get(id).pipe(
           switchMap((bitza) =>
-            this.buildAncestorChain(bitza).pipe(map((breadcrumb) => ({ bitza, breadcrumb }))),
+            this.bitzaService
+              .getAncestors(id)
+              // Nearest parent first, root last (see BitzaAncestor) —
+              // reversed here for root-first breadcrumb display.
+              .pipe(map((ancestors) => ({ bitza, breadcrumb: [...ancestors].reverse() }))),
           ),
           catchError(() => {
             this.loadErrorSignal.set(true);
-            return of({ bitza: null as Bitza | null, breadcrumb: [] as Bitza[] });
+            return of({ bitza: null as Bitza | null, breadcrumb: [] as BitzaAncestor[] });
           }),
         );
       }),
@@ -429,8 +434,14 @@ export class BitzaBrowser {
   );
 
   protected readonly currentBitza = computed(() => this.pageData()?.bitza ?? null);
-  /** Ancestors only, root first — excludes the current bitza itself. */
-  protected readonly breadcrumb = computed(() => (this.pageData()?.breadcrumb ?? []).slice(0, -1));
+  /**
+   * Ancestors only, root first — excludes the current bitza itself (the
+   * ancestors endpoint never includes it, so no slicing needed here).
+   * Previously rebuilt via N sequential GET /bitzas/{id} calls walking
+   * parent_id one hop at a time (RxJS `expand`); now one call to
+   * GET /bitzas/{id}/ancestors. See bitza_schema_reconciliation_todo.md.
+   */
+  protected readonly breadcrumb = computed(() => this.pageData()?.breadcrumb ?? []);
 
   private readonly childrenResult = toSignal(
     combineLatest([this.currentId$, this.reload$, this.filtersBundle$]).pipe(
@@ -449,14 +460,6 @@ export class BitzaBrowser {
 
   protected readonly childrenLoading = computed(() => this.childrenResult() === undefined);
   protected readonly children = computed(() => this.childrenResult() ?? []);
-
-  private buildAncestorChain(bitza: Bitza) {
-    return of(bitza).pipe(
-      expand((current) => (current.parent_id ? this.bitzaService.get(current.parent_id) : of())),
-      toArray(),
-      map((chain) => chain.reverse()),
-    );
-  }
 
   protected openBitza(id: string): void {
     this.router.navigate(['/bitzas', id]);

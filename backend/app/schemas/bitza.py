@@ -185,6 +185,22 @@ class BitzaListRead(BaseModel):
     is_root: bool = False
 
 
+class BitzaAncestorRead(BaseModel):
+    """
+    Minimal shape for GET /bitzas/{id}/ancestors — just enough to link
+    and label a breadcrumb, deliberately lighter than BitzaListRead
+    (no team/category lookups per ancestor). Ordered nearest parent
+    first, root last — the same order BitzaRepository.get_ancestors()
+    already computes; reversing a handful of items client-side for
+    root-first breadcrumb display is cheaper than baking one specific
+    consumer's preferred order into a general-purpose endpoint.
+    """
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    name: str
+
+
 # ---------------------------------------------------------------------------
 # Retire / reactivate
 # ---------------------------------------------------------------------------

@@ -4,6 +4,7 @@ import { Observable } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import {
   Bitza,
+  BitzaAncestor,
   BitzaCreate,
   BitzaListItem,
   BitzaListParams,
@@ -42,6 +43,15 @@ export class BitzaService {
     return this.http.get<Bitza>(`${this.baseUrl}/${id}`);
   }
 
+  /**
+   * Nearest parent first, root last; excludes the bitza itself. Powers
+   * the breadcrumb — one call instead of walking parent_id one hop at
+   * a time via repeated get() calls.
+   */
+  getAncestors(id: string): Observable<BitzaAncestor[]> {
+    return this.http.get<BitzaAncestor[]>(`${this.baseUrl}/${id}/ancestors`);
+  }
+
   create(bitza: BitzaCreate): Observable<Bitza> {
     return this.http.post<Bitza>(`${this.baseUrl}/`, bitza);
   }
@@ -63,10 +73,7 @@ export class BitzaService {
    * default shown in a picker is frontend UX only. See
    * "Reassigning responsible team" in bitza_project_context.md.
    */
-  reassignTeam(
-    id: string,
-    request: BitzaReassignTeamRequest,
-  ): Observable<ReassignTeamResponse> {
+  reassignTeam(id: string, request: BitzaReassignTeamRequest): Observable<ReassignTeamResponse> {
     return this.http.post<ReassignTeamResponse>(`${this.baseUrl}/${id}/reassign-team`, request);
   }
 

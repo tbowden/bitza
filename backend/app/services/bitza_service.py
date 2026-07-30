@@ -37,6 +37,7 @@ from app.repositories.user_repository import UserRepository
 from app.schemas.audit import AuditLogRead
 from app.schemas.category import CategoryCreate, CategoryRead, CategoryUpdate
 from app.schemas.bitza import (
+    BitzaAncestorRead,
     BitzaCreate,
     BitzaImageRead,
     BitzaListRead,
@@ -247,6 +248,15 @@ class BitzaService:
             raise _not_found("Bitza not found")
         return self._enrich_bitza(bitza, root_id=self._get_root_bitza_id())
 
+    def get_ancestors(self, bitza_id: str) -> list[BitzaAncestorRead]:
+        """Thin wrapper around BitzaRepository.get_ancestors() (already
+        used internally for update_bitza's cycle-detection check) —
+        exposes the same recursive-CTE walk so the frontend breadcrumb
+        can replace N sequential GET /bitzas/{id} calls with one."""
+        if not self._bitzas.get(bitza_id):
+            raise _not_found("Bitza not found")
+        return [BitzaAncestorRead.model_validate(b) for b in self._bitzas.get_ancestors(bitza_id)]
+
     def list_bitzas(
         self,
         parent_id: Optional[str] = None,
@@ -327,6 +337,11 @@ class BitzaService:
         if data.low_stock_threshold is not None:
             bitza.low_stock_threshold = data.low_stock_threshold
         if data.fuzzy_state is not None:
+            if bitza.kind != BitzaKind.stock or bitza.stock_mode != StockMode.fuzzy:
+                raise ConflictError(
+                    "fuzzy_state can only be set on a bitza with kind='stock' and "
+                    "stock_mode='fuzzy'"
+                )
             bitza.fuzzy_state = data.fuzzy_state
 
         updated = self._bitzas.update(bitza)

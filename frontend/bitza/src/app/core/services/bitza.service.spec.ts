@@ -81,4 +81,16 @@ describe('BitzaService', () => {
     req.flush(null);
     await promise;
   });
+
+  it('fetches the ancestor chain via a single call, nearest parent first', async () => {
+    const promise = firstValueFrom(service.getAncestors('b1'));
+    const req = httpMock.expectOne(`${environment.apiUrl}/bitzas/b1/ancestors`);
+    expect(req.request.method).toBe('GET');
+    req.flush([
+      { id: 'parent', name: 'Toolbox' },
+      { id: 'root', name: 'Home' },
+    ]);
+    const result = await promise;
+    expect(result.map((a) => a.id)).toEqual(['parent', 'root']);
+  });
 });

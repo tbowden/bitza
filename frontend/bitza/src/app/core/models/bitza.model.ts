@@ -102,6 +102,20 @@ export interface BitzaListItem {
   is_root: boolean;
 }
 
+/**
+ * One row of GET /bitzas/{id}/ancestors — deliberately lighter than
+ * BitzaListItem (just enough to link and label a breadcrumb crumb, no
+ * team/category lookups per ancestor). Ordered nearest parent first,
+ * root last; excludes the bitza itself — the frontend reverses this
+ * for root-first breadcrumb display. Replaces the old N-sequential-
+ * GET-calls approach (RxJS `expand` walking parent_id one hop at a
+ * time) with a single call.
+ */
+export interface BitzaAncestor {
+  id: string;
+  name: string;
+}
+
 export interface BitzaCreate {
   name: string;
   kind: BitzaKind;
