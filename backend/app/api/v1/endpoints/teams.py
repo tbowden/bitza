@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, Query, status
 from app.core.dependencies import get_current_user, get_team_service
 from app.models.user import User
 from app.schemas.team import (
+    MyTeamMembershipRead,
     TeamCreate,
     TeamListRead,
     TeamMemberCreate,
@@ -57,6 +58,25 @@ def create_team(
     """Any authenticated user may create a team — this covers both the
     club's dozen-team structure and a home user's one-off project team."""
     return svc.create_team(data=body)
+
+
+# Registered before GET /{team_id} — a static path segment must come
+# before a path-parameter route matching the same position, or FastAPI
+# would treat "mine" as a team_id here and 404 in get_team instead (same
+# reasoning as GET /users/directory vs GET /users/{user_id}).
+@router.get(
+    "/mine",
+    response_model=list[MyTeamMembershipRead],
+    summary="Teams you're on, with your primary-team flag",
+)
+def list_my_memberships(
+    current_user: User = Depends(get_current_user),
+    svc: TeamService = Depends(get_team_service),
+) -> list[MyTeamMembershipRead]:
+    """Powers the '/me' landing page. Unlike GET /teams/?user_id=, which
+    returns full TeamListRead rows (id/name/member_count) for any user,
+    this is always scoped to the caller and includes is_primary."""
+    return svc.list_my_memberships(user_id=current_user.id)
 
 
 @router.get("/{team_id}", response_model=TeamRead, summary="Get a team")

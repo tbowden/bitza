@@ -98,4 +98,13 @@ describe('TeamService', () => {
     req.flush(null);
     await promise;
   });
+
+  it("fetches the current user's own memberships, including is_primary", async () => {
+    const promise = firstValueFrom(service.listMine());
+    const req = httpMock.expectOne(`${environment.apiUrl}/teams/mine`);
+    expect(req.request.method).toBe('GET');
+    req.flush([{ team_id: 't1', team_name: 'Aero', is_primary: true }]);
+    const result = await promise;
+    expect(result[0]).toEqual({ team_id: 't1', team_name: 'Aero', is_primary: true });
+  });
 });

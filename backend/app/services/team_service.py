@@ -10,6 +10,7 @@ from app.repositories.bitza_repository import BitzaRepository
 from app.repositories.team_repository import TeamRepository
 from app.repositories.user_repository import UserRepository
 from app.schemas.team import (
+    MyTeamMembershipRead,
     TeamCreate,
     TeamListRead,
     TeamMemberCreate,
@@ -150,6 +151,23 @@ class TeamService:
             raise _not_found("This user is not a member of this team")
         self._teams.delete_member(member)
         self._db.commit()
+
+    def list_my_memberships(self, user_id: str) -> list[MyTeamMembershipRead]:
+        """Powers the '/me' landing page's "teams you're on" section —
+        team name plus is_primary in one call, rather than making the
+        frontend cross-reference GET /teams/?user_id= against a separate
+        primary lookup."""
+        memberships = self._teams.list_teams_for_user(user_id)
+        result: list[MyTeamMembershipRead] = []
+        for m in memberships:
+            team = self._teams.get(m.team_id)
+            if team:
+                result.append(
+                    MyTeamMembershipRead(
+                        team_id=team.id, team_name=team.name, is_primary=m.is_primary
+                    )
+                )
+        return result
 
     def set_primary(self, team_id: str, user_id: str, is_primary: bool) -> TeamMemberRead:
         member = self._teams.get_member(team_id, user_id)

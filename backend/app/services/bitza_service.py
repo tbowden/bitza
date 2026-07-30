@@ -46,6 +46,7 @@ from app.schemas.bitza import (
     CheckinRequest,
     CheckoutCreate,
     CheckoutRead,
+    MyCheckoutRead,
     ReassignTeamRequest,
     ReassignTeamResponse,
     StockAdjustmentCreate,
@@ -536,6 +537,16 @@ class BitzaService:
             raise _not_found("Bitza not found")
         return [self._enrich_checkout(c) for c in self._checkouts.list_for_bitza(bitza_id)]
 
+    def list_my_checkouts(self, actor: User) -> list[MyCheckoutRead]:
+        """Every bitza currently checked out to the current user, across
+        the whole tree — powers the '/me' landing page. Unlike
+        list_checkouts (scoped to one bitza's history), this is scoped to
+        one holder across every bitza."""
+        return [
+            self._enrich_my_checkout(c)
+            for c in self._checkouts.list_open_for_holder(actor.id)
+        ]
+
     # ------------------------------------------------------------------
     # Stock adjustments (kind = stock, stock_mode = exact only)
     # ------------------------------------------------------------------
@@ -767,6 +778,18 @@ class BitzaService:
         r = CheckoutRead.model_validate(checkout)
         r.holder_display_name = self._user_display_name(checkout.holder_id)
         return r
+
+    def _enrich_my_checkout(self, checkout: Checkout) -> MyCheckoutRead:
+        bitza = self._bitzas.get(checkout.bitza_id)
+        return MyCheckoutRead(
+            id=checkout.id,
+            bitza_id=checkout.bitza_id,
+            bitza_name=bitza.name if bitza else "(deleted)",
+            bitza_kind=bitza.kind if bitza else None,
+            team_context=checkout.team_context,
+            checked_out_at=checkout.checked_out_at,
+            note=checkout.note,
+        )
 
     def _enrich_stock_log(self, log: StockLog) -> StockAdjustmentRead:
         r = StockAdjustmentRead.model_validate(log)

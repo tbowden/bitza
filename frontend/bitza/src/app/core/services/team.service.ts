@@ -3,6 +3,7 @@ import { Service, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import {
+  MyTeamMembership,
   Team,
   TeamCreate,
   TeamListItem,
@@ -56,5 +57,14 @@ export class TeamService {
 
   removeMember(teamId: string, userId: string): Observable<void> {
     return this.http.delete<void>(`${this.baseUrl}/${teamId}/members/${userId}`);
+  }
+
+  /**
+   * The current user's own memberships, with the is_primary flag —
+   * powers the '/me' page. Always scoped server-side to the caller,
+   * unlike list(userId), which can look up any user's teams.
+   */
+  listMine(): Observable<MyTeamMembership[]> {
+    return this.http.get<MyTeamMembership[]>(`${this.baseUrl}/mine`);
   }
 }

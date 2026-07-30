@@ -53,3 +53,16 @@ export interface TeamMemberCreate {
   user_id: string;
   is_primary?: boolean;
 }
+
+/**
+ * One row of GET /teams/mine — the current user's own memberships,
+ * team name plus is_primary in one call. Distinct from `TeamListItem`
+ * (GET /teams/?user_id=): that shape is built for browsing any user's
+ * teams and omits is_primary entirely, since primary-ness is only
+ * meaningful for the current user's own checkout defaults.
+ */
+export interface MyTeamMembership {
+  team_id: string;
+  team_name: string;
+  is_primary: boolean;
+}

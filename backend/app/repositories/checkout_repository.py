@@ -27,6 +27,19 @@ class CheckoutRepository:
         )
         return list(self._db.scalars(stmt).all())
 
+    def list_open_for_holder(self, holder_id: str) -> list[Checkout]:
+        """Every currently-open checkout held by one user, across the
+        whole tree — powers the '/me' landing page. Unlike
+        ``list_for_bitza``, this queries across bitza_id rather than
+        scoping to one, since a user's checked-out items can live
+        anywhere in the hierarchy."""
+        stmt = (
+            select(Checkout)
+            .where(Checkout.holder_id == holder_id, Checkout.checked_in_at.is_(None))
+            .order_by(Checkout.checked_out_at.desc())
+        )
+        return list(self._db.scalars(stmt).all())
+
     def create(self, checkout: Checkout) -> Checkout:
         self._db.add(checkout)
         self._db.flush()

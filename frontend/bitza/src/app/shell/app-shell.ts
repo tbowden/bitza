@@ -55,6 +55,15 @@ import { AuthService } from '../core/services/auth.service';
             <mat-icon matListItemIcon>groups</mat-icon>
             <span matListItemTitle>{{ config.teamLabelPlural() }}</span>
           </a>
+          <a
+            mat-list-item
+            routerLink="/me"
+            routerLinkActive="active-link"
+            (click)="isHandset() && sidenav.close()"
+          >
+            <mat-icon matListItemIcon>person</mat-icon>
+            <span matListItemTitle>Me</span>
+          </a>
 
           @if (authService.isAdmin()) {
             <mat-divider></mat-divider>

@@ -62,4 +62,23 @@ describe('CheckoutService', () => {
     req.flush([]);
     await promise;
   });
+
+  it("fetches the current user's open checkouts from the top-level resource", async () => {
+    const promise = firstValueFrom(service.listMine());
+    const req = httpMock.expectOne(`${environment.apiUrl}/checkouts/mine`);
+    expect(req.request.method).toBe('GET');
+    req.flush([
+      {
+        id: 'c1',
+        bitza_id: 'b1',
+        bitza_name: 'Drill',
+        bitza_kind: 'mobile',
+        team_context: null,
+        checked_out_at: '2026-01-01T00:00:00Z',
+        note: null,
+      },
+    ]);
+    const result = await promise;
+    expect(result[0].bitza_name).toBe('Drill');
+  });
 });

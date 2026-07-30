@@ -221,3 +221,61 @@ class TestTeamMembership:
             f"{BASE}/{team['id']}/members/{normal_user.id}", headers=auth(user_token)
         )
         assert resp.status_code == 404
+
+
+# =========================================================================
+# My team memberships (/me landing page)
+# =========================================================================
+
+class TestMyTeamMemberships:
+    def test_list_my_memberships_includes_primary_flag(
+        self, client: TestClient, user_token: str, normal_user: User
+    ) -> None:
+        team_a = client.post(
+            BASE + "/", json={"name": "Mine A"}, headers=auth(user_token)
+        ).json()
+        team_b = client.post(
+            BASE + "/", json={"name": "Mine B"}, headers=auth(user_token)
+        ).json()
+        client.post(
+            f"{BASE}/{team_a['id']}/members",
+            json={"user_id": normal_user.id, "is_primary": True},
+            headers=auth(user_token),
+        )
+        client.post(
+            f"{BASE}/{team_b['id']}/members",
+            json={"user_id": normal_user.id},
+            headers=auth(user_token),
+        )
+
+        resp = client.get(f"{BASE}/mine", headers=auth(user_token))
+        assert resp.status_code == 200
+        by_name = {m["team_name"]: m["is_primary"] for m in resp.json()}
+        assert by_name == {"Mine A": True, "Mine B": False}
+
+    def test_list_my_memberships_empty_when_on_no_teams(
+        self, client: TestClient, second_user_token: str
+    ) -> None:
+        resp = client.get(f"{BASE}/mine", headers=auth(second_user_token))
+        assert resp.status_code == 200
+        assert resp.json() == []
+
+    def test_list_my_memberships_does_not_leak_other_users(
+        self,
+        client: TestClient,
+        user_token: str,
+        second_user_token: str,
+        normal_user: User,
+    ) -> None:
+        team = client.post(
+            BASE + "/", json={"name": "Only Mine"}, headers=auth(user_token)
+        ).json()
+        client.post(
+            f"{BASE}/{team['id']}/members",
+            json={"user_id": normal_user.id},
+            headers=auth(user_token),
+        )
+        # second_user was never added — their "mine" view must be empty.
+        resp = client.get(f"{BASE}/mine", headers=auth(second_user_token))
+        assert resp.status_code == 200
+        assert resp.json() == []

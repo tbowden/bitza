@@ -588,6 +588,67 @@ class TestCheckout:
 
 
 # =========================================================================
+# My checkouts (/me landing page)
+# =========================================================================
+
+class TestMyCheckouts:
+    def test_list_my_checkouts_returns_open_only(
+        self, client: TestClient, user_token: str, default_team: Team
+    ) -> None:
+        tool = make_mobile(client, user_token, default_team.id, name="Drill")
+        client.post(f"{BASE}/{tool['id']}/checkout", json={}, headers=auth(user_token))
+
+        resp = client.get("/api/v1/checkouts/mine", headers=auth(user_token))
+        assert resp.status_code == 200
+        assert len(resp.json()) == 1
+        assert resp.json()[0]["bitza_name"] == "Drill"
+        assert resp.json()[0]["bitza_kind"] == "mobile"
+
+    def test_checked_in_items_excluded(
+        self, client: TestClient, user_token: str, default_team: Team
+    ) -> None:
+        tool = make_mobile(client, user_token, default_team.id)
+        client.post(f"{BASE}/{tool['id']}/checkout", json={}, headers=auth(user_token))
+        client.post(f"{BASE}/{tool['id']}/checkin", json={}, headers=auth(user_token))
+
+        resp = client.get("/api/v1/checkouts/mine", headers=auth(user_token))
+        assert resp.status_code == 200
+        assert resp.json() == []
+
+    def test_only_returns_current_users_checkouts(
+        self,
+        client: TestClient,
+        user_token: str,
+        second_user_token: str,
+        default_team: Team,
+    ) -> None:
+        tool = make_mobile(client, user_token, default_team.id)
+        client.post(f"{BASE}/{tool['id']}/checkout", json={}, headers=auth(user_token))
+
+        resp = client.get("/api/v1/checkouts/mine", headers=auth(second_user_token))
+        assert resp.status_code == 200
+        assert resp.json() == []
+
+    def test_spans_whole_tree_not_one_subtree(
+        self, client: TestClient, user_token: str, default_team: Team
+    ) -> None:
+        """A user's checked-out items can live anywhere in the hierarchy —
+        this must not be scoped to a single parent's subtree."""
+        room = make_fixed(client, user_token, default_team.id, name="Garage")
+        tool_a = make_mobile(
+            client, user_token, default_team.id, name="Multimeter", parent_id=room["id"]
+        )
+        tool_b = make_mobile(client, user_token, default_team.id, name="Drill")
+        client.post(f"{BASE}/{tool_a['id']}/checkout", json={}, headers=auth(user_token))
+        client.post(f"{BASE}/{tool_b['id']}/checkout", json={}, headers=auth(user_token))
+
+        resp = client.get("/api/v1/checkouts/mine", headers=auth(user_token))
+        assert resp.status_code == 200
+        names = {row["bitza_name"] for row in resp.json()}
+        assert names == {"Multimeter", "Drill"}
+
+
+# =========================================================================
 # Stock adjustments
 # =========================================================================
 

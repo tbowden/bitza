@@ -2,7 +2,7 @@ import { HttpClient } from '@angular/common/http';
 import { Service, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import { environment } from '../../../environments/environment';
-import { CheckinRequest, Checkout, CheckoutRequest } from '../models';
+import { CheckinRequest, Checkout, CheckoutRequest, MyCheckout } from '../models';
 
 @Service()
 export class CheckoutService {
@@ -28,5 +28,15 @@ export class CheckoutService {
   /** Newest first. "Currently checked out" is derived: the row (if any) with checked_in_at === null. */
   history(bitzaId: string): Observable<Checkout[]> {
     return this.http.get<Checkout[]>(`${this.baseUrl}/${bitzaId}/checkouts`);
+  }
+
+  /**
+   * Everything currently checked out to the current user, across the
+   * whole tree — powers the '/me' page. Top-level resource, not nested
+   * under /bitzas/{id}, since it's scoped to a holder rather than to
+   * one bitza.
+   */
+  listMine(): Observable<MyCheckout[]> {
+    return this.http.get<MyCheckout[]>(`${environment.apiUrl}/checkouts/mine`);
   }
 }

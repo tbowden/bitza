@@ -50,6 +50,11 @@ export const routes: Routes = [
         title: 'Team detail',
       },
       {
+        path: 'me',
+        loadComponent: () => import('./features/me/me-page/me-page').then((m) => m.MePage),
+        title: 'Me',
+      },
+      {
         path: 'users',
         canActivate: [adminGuard],
         loadComponent: () =>

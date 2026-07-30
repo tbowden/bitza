@@ -17,6 +17,7 @@ from app.schemas.bitza import (
     CheckinRequest,
     CheckoutCreate,
     CheckoutRead,
+    MyCheckoutRead,
     ReassignTeamRequest,
     ReassignTeamResponse,
     StockAdjustmentCreate,
@@ -436,8 +437,32 @@ def delete_image(
 
 
 # ---------------------------------------------------------------------------
+# My checkouts — top-level resource (not nested under /bitzas/{id}, since
+# it's scoped to a holder across the whole tree, not to one bitza)
+# ---------------------------------------------------------------------------
+
+checkouts_router = APIRouter(prefix="/checkouts")
+
+
+@checkouts_router.get(
+    "/mine",
+    response_model=list[MyCheckoutRead],
+    summary="Everything currently checked out to you, across the whole tree",
+)
+def list_my_checkouts(
+    current_user: User = Depends(get_current_user),
+    svc: BitzaService = Depends(get_bitza_service),
+) -> list[MyCheckoutRead]:
+    """Powers the '/me' landing page's checked-out-items section. Newest
+    first; only open checkouts (checked_in_at IS NULL) — history for
+    items you've already returned isn't included here."""
+    return svc.list_my_checkouts(actor=current_user)
+
+
+# ---------------------------------------------------------------------------
 # Combine sub-routers
 # ---------------------------------------------------------------------------
 
 router.include_router(categories_router)
 router.include_router(bitzas_router)
+router.include_router(checkouts_router)

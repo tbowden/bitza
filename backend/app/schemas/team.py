@@ -59,3 +59,13 @@ class TeamMemberRead(BaseModel):
     user_display_name: str = ""   # populated by service
     is_primary: bool
     created_at: datetime
+
+
+class MyTeamMembershipRead(BaseModel):
+    """One row of the current user's own team memberships, for the '/me'
+    landing page — team name plus the is_primary flag so the frontend
+    can highlight it, without a client-side join against GET /teams/."""
+
+    team_id: str
+    team_name: str
+    is_primary: bool

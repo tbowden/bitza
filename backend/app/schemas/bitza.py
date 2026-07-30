@@ -263,6 +263,22 @@ class CheckoutRead(BaseModel):
     note: Optional[str]
 
 
+class MyCheckoutRead(BaseModel):
+    """One row of the current user's open checkouts, for the '/me'
+    landing page. Not built via ``model_validate`` from the Checkout ORM
+    object (unlike CheckoutRead) since bitza_name/bitza_kind live on the
+    related Bitza, not the Checkout row itself — the service assembles
+    this directly."""
+
+    id: str
+    bitza_id: str
+    bitza_name: str
+    bitza_kind: Optional[BitzaKind] = None   # None only if the bitza row is gone
+    team_context: Optional[str]
+    checked_out_at: datetime
+    note: Optional[str]
+
+
 # ---------------------------------------------------------------------------
 # Stock adjustments
 # ---------------------------------------------------------------------------
