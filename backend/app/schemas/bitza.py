@@ -92,17 +92,30 @@ class BitzaUpdate(BaseModel):
     for this one row. Use POST /bitzas/{id}/reassign-team when you want an
     explicit cascade scope and a dedicated audit trail entry for the sweep.
 
-    kind is intentionally NOT editable — converting a fixed location into
-    a checkoutable tool (or vice versa) is a re-creation, not an update.
+    kind IS conditionally editable (see BitzaService.update_bitza for the
+    history guards — this schema only validates input shape, not
+    persisted history, since that needs a DB lookup):
+      - Moving to kind='stock' needs the same stock_mode/quantity/
+        fuzzy_state shape BitzaCreate requires.
+      - Moving away from kind='stock' forbids all stock_* fields (they're
+        nulled out server-side instead).
+      - stock_mode may also be changed on an already-stock bitza without
+        touching kind — same nested shape rules apply, since it's the
+        same kind of transition (exact -> fuzzy or back).
 
-    quantity is intentionally NOT editable here — exact stock changes must
+    quantity is otherwise NOT editable here — exact stock changes must
     go through POST /bitzas/{id}/stock-adjustments so the log stays
-    complete. fuzzy_state IS editable here directly, matching "fuzzy =
-    approximate, no expectation of perfect accuracy, no log needed".
+    complete. It's only accepted here as the *starting* value for a
+    transition into stock_mode='exact' (see the validator below); the
+    service layer separately rejects it if stock_mode isn't actually
+    changing. fuzzy_state IS editable here directly when no transition
+    is happening, matching "fuzzy = approximate, no expectation of
+    perfect accuracy, no log needed".
     """
 
     name: Optional[str] = Field(None, min_length=1, max_length=200)
     description: Optional[str] = None
+    kind: Optional[BitzaKind] = None
     parent_id: Optional[str] = None
     responsible_team_id: Optional[str] = None
     category_id: Optional[str] = None
@@ -112,8 +125,63 @@ class BitzaUpdate(BaseModel):
     purchase_date: Optional[datetime] = None
     order_url: Optional[str] = None
 
+    stock_mode: Optional[StockMode] = None
+    quantity: Optional[int] = Field(None, ge=0)
     low_stock_threshold: Optional[int] = Field(None, ge=0)
     fuzzy_state: Optional[FuzzyState] = None
+
+    @model_validator(mode="after")
+    def _validate_kind_transition_shape(self) -> "BitzaUpdate":
+        # No kind/stock_mode change requested — existing standalone
+        # fuzzy_state/low_stock_threshold editing is untouched by this
+        # validator; the service layer still checks those against the
+        # bitza's persisted kind/stock_mode. quantity, however, is only
+        # ever valid here as a transition's starting value.
+        if self.kind is None and self.stock_mode is None:
+            if self.quantity is not None:
+                raise ValueError(
+                    "quantity may only be set here as the starting value when "
+                    "moving to stock_mode='exact' — ongoing exact-mode quantity "
+                    "changes must go through POST .../stock-adjustments"
+                )
+            return self
+
+        # kind explicitly moving to something other than 'stock'.
+        if self.kind is not None and self.kind != BitzaKind.stock:
+            if any(
+                v is not None
+                for v in (self.stock_mode, self.quantity, self.low_stock_threshold, self.fuzzy_state)
+            ):
+                raise ValueError(
+                    "stock_mode/quantity/low_stock_threshold/fuzzy_state may only be "
+                    "set when kind='stock'"
+                )
+            return self
+
+        # Either kind is becoming/staying 'stock', or stock_mode is
+        # changing on an already-stock bitza (kind omitted — the
+        # service layer confirms the bitza really is kind='stock'
+        # before allowing a bare stock_mode change).
+        if self.stock_mode is None:
+            raise ValueError("stock_mode is required when changing kind to 'stock'")
+        if self.stock_mode == StockMode.exact:
+            if self.quantity is None:
+                raise ValueError(
+                    "quantity is required (as the starting value) when moving to "
+                    "stock_mode='exact'"
+                )
+            if self.fuzzy_state is not None:
+                raise ValueError("fuzzy_state must not be set when stock_mode='exact'")
+        else:  # fuzzy
+            if self.fuzzy_state is None:
+                raise ValueError(
+                    "fuzzy_state is required when moving to stock_mode='fuzzy'"
+                )
+            if self.quantity is not None or self.low_stock_threshold is not None:
+                raise ValueError(
+                    "quantity/low_stock_threshold must not be set when stock_mode='fuzzy'"
+                )
+        return self
 
 
 # ---------------------------------------------------------------------------

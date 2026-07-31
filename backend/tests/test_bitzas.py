@@ -773,6 +773,198 @@ class TestStockAdjustments:
 
 
 # =========================================================================
+# Kind editability (conditional — see bitza_schema_reconciliation_todo.md
+# section B). kind/stock_mode transitions are guarded by history, not by
+# permission level — any authenticated user who can PATCH a bitza at all
+# can attempt one; the guard is what protects the data.
+# =========================================================================
+
+class TestKindEditability:
+    def test_fixed_to_mobile_allowed(
+        self, client: TestClient, user_token: str, default_team: Team
+    ) -> None:
+        shelf = make_fixed(client, user_token, default_team.id)
+        resp = client.patch(f"{BASE}/{shelf['id']}", json={"kind": "mobile"}, headers=auth(user_token))
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["kind"] == "mobile"
+
+    def test_mobile_to_fixed_blocked_with_checkout_history(
+        self, client: TestClient, user_token: str, default_team: Team
+    ) -> None:
+        tool = make_mobile(client, user_token, default_team.id)
+        client.post(f"{BASE}/{tool['id']}/checkout", json={}, headers=auth(user_token))
+        client.post(f"{BASE}/{tool['id']}/checkin", json={}, headers=auth(user_token))
+
+        resp = client.patch(f"{BASE}/{tool['id']}", json={"kind": "fixed"}, headers=auth(user_token))
+        assert resp.status_code == 409
+
+    def test_mobile_to_fixed_allowed_without_checkout_history(
+        self, client: TestClient, user_token: str, default_team: Team
+    ) -> None:
+        tool = make_mobile(client, user_token, default_team.id)
+        resp = client.patch(f"{BASE}/{tool['id']}", json={"kind": "fixed"}, headers=auth(user_token))
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["kind"] == "fixed"
+
+    def test_change_to_stock_requires_stock_mode(
+        self, client: TestClient, user_token: str, default_team: Team
+    ) -> None:
+        shelf = make_fixed(client, user_token, default_team.id)
+        resp = client.patch(f"{BASE}/{shelf['id']}", json={"kind": "stock"}, headers=auth(user_token))
+        assert resp.status_code == 422
+
+    def test_fixed_to_stock_exact_allowed(
+        self, client: TestClient, user_token: str, default_team: Team
+    ) -> None:
+        shelf = make_fixed(client, user_token, default_team.id)
+        resp = client.patch(
+            f"{BASE}/{shelf['id']}",
+            json={"kind": "stock", "stock_mode": "exact", "quantity": 10},
+            headers=auth(user_token),
+        )
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+        assert body["kind"] == "stock"
+        assert body["quantity"] == 10
+
+    def test_fixed_to_stock_fuzzy_allowed(
+        self, client: TestClient, user_token: str, default_team: Team
+    ) -> None:
+        shelf = make_fixed(client, user_token, default_team.id)
+        resp = client.patch(
+            f"{BASE}/{shelf['id']}",
+            json={"kind": "stock", "stock_mode": "fuzzy", "fuzzy_state": "plentiful"},
+            headers=auth(user_token),
+        )
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["fuzzy_state"] == "plentiful"
+
+    def test_stock_to_fixed_nulls_stock_fields(
+        self, client: TestClient, user_token: str, default_team: Team
+    ) -> None:
+        stock = make_exact_stock(client, user_token, default_team.id, qty=5)
+        resp = client.patch(f"{BASE}/{stock['id']}", json={"kind": "fixed"}, headers=auth(user_token))
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+        assert body["kind"] == "fixed"
+        assert body["quantity"] is None
+        assert body["fuzzy_state"] is None
+
+    def test_stock_exact_to_fixed_blocked_with_adjustment_history(
+        self, client: TestClient, user_token: str, default_team: Team
+    ) -> None:
+        stock = make_exact_stock(client, user_token, default_team.id, qty=5)
+        client.post(
+            f"{BASE}/{stock['id']}/stock-adjustments",
+            json={"delta": 3, "note": "restock"},
+            headers=auth(user_token),
+        )
+        resp = client.patch(f"{BASE}/{stock['id']}", json={"kind": "fixed"}, headers=auth(user_token))
+        assert resp.status_code == 409
+
+    def test_stock_exact_to_fixed_allowed_without_adjustment_history(
+        self, client: TestClient, user_token: str, default_team: Team
+    ) -> None:
+        """Setting the initial quantity at creation doesn't write a
+        StockLog row (only POST .../stock-adjustments does) — an
+        exact-mode item that's never been adjusted is still switchable."""
+        stock = make_exact_stock(client, user_token, default_team.id, qty=5)
+        resp = client.patch(f"{BASE}/{stock['id']}", json={"kind": "fixed"}, headers=auth(user_token))
+        assert resp.status_code == 200, resp.text
+
+    def test_stock_mode_exact_to_fuzzy_without_kind_change(
+        self, client: TestClient, user_token: str, default_team: Team
+    ) -> None:
+        stock = make_exact_stock(client, user_token, default_team.id, qty=5)
+        resp = client.patch(
+            f"{BASE}/{stock['id']}",
+            json={"stock_mode": "fuzzy", "fuzzy_state": "low"},
+            headers=auth(user_token),
+        )
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+        assert body["kind"] == "stock"
+        assert body["stock_mode"] == "fuzzy"
+        assert body["fuzzy_state"] == "low"
+        assert body["quantity"] is None
+
+    def test_stock_mode_change_blocked_with_adjustment_history(
+        self, client: TestClient, user_token: str, default_team: Team
+    ) -> None:
+        stock = make_exact_stock(client, user_token, default_team.id, qty=5)
+        client.post(
+            f"{BASE}/{stock['id']}/stock-adjustments",
+            json={"delta": -2},
+            headers=auth(user_token),
+        )
+        resp = client.patch(
+            f"{BASE}/{stock['id']}",
+            json={"stock_mode": "fuzzy", "fuzzy_state": "low"},
+            headers=auth(user_token),
+        )
+        assert resp.status_code == 409
+
+    def test_stock_mode_fuzzy_to_exact_allowed(
+        self, client: TestClient, user_token: str, default_team: Team
+    ) -> None:
+        stock = client.post(
+            BASE + "/",
+            json={
+                "name": "Zip Ties",
+                "kind": "stock",
+                "responsible_team_id": default_team.id,
+                "parent_id": _root_id(client, user_token),
+                "stock_mode": "fuzzy",
+                "fuzzy_state": "plentiful",
+            },
+            headers=auth(user_token),
+        ).json()
+        resp = client.patch(
+            f"{BASE}/{stock['id']}",
+            json={"stock_mode": "exact", "quantity": 20},
+            headers=auth(user_token),
+        )
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+        assert body["stock_mode"] == "exact"
+        assert body["quantity"] == 20
+        assert body["fuzzy_state"] is None
+
+    def test_stock_mode_without_kind_rejected_when_not_already_stock(
+        self, client: TestClient, user_token: str, default_team: Team
+    ) -> None:
+        tool = make_mobile(client, user_token, default_team.id)
+        resp = client.patch(
+            f"{BASE}/{tool['id']}",
+            json={"stock_mode": "exact", "quantity": 5},
+            headers=auth(user_token),
+        )
+        assert resp.status_code == 409
+
+    def test_quantity_alone_still_rejected(
+        self, client: TestClient, user_token: str, default_team: Team
+    ) -> None:
+        """Ongoing exact-mode quantity changes must still go through
+        stock-adjustments — quantity is only ever accepted here as a
+        transition's starting value, alongside kind or stock_mode."""
+        stock = make_exact_stock(client, user_token, default_team.id, qty=5)
+        resp = client.patch(f"{BASE}/{stock['id']}", json={"quantity": 99}, headers=auth(user_token))
+        assert resp.status_code == 422
+
+    def test_kind_change_writes_dedicated_audit_entry(
+        self, client: TestClient, admin_token: str, user_token: str, default_team: Team
+    ) -> None:
+        shelf = make_fixed(client, user_token, default_team.id, name="Audited Shelf")
+        client.patch(f"{BASE}/{shelf['id']}", json={"kind": "mobile"}, headers=auth(user_token))
+
+        resp = client.get(f"{BASE_AUDIT}/?entity_id={shelf['id']}", headers=auth(admin_token))
+        kind_entries = [e for e in resp.json() if e["action"] == "CHANGE_KIND"]
+        assert len(kind_entries) == 1
+        update_entries = [e for e in resp.json() if e["action"] == "UPDATE"]
+        assert len(update_entries) == 0, "kind change should not also log a generic UPDATE entry"
+
+
+# =========================================================================
 # Categories
 # =========================================================================
 

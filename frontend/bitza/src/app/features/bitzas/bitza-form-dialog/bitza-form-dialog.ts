@@ -2,14 +2,21 @@ import { Component, computed, inject, signal } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { FormField, applyWhen, form, min, required, submit } from '@angular/forms/signals';
 import { MatButtonModule } from '@angular/material/button';
-import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
+import {
+  MAT_DIALOG_DATA,
+  MatDialog,
+  MatDialogModule,
+  MatDialogRef,
+} from '@angular/material/dialog';
 import { MatExpansionModule } from '@angular/material/expansion';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
-import { catchError, of } from 'rxjs';
+import { Observable, catchError, firstValueFrom, map, of } from 'rxjs';
 import { AppConfigService } from '../../../core/services/app-config.service';
 import { CategoryService } from '../../../core/services/category.service';
+import { CheckoutService } from '../../../core/services/checkout.service';
+import { StockService } from '../../../core/services/stock.service';
 import { TeamService } from '../../../core/services/team.service';
 import {
   Bitza,
@@ -17,10 +24,13 @@ import {
   BitzaKind,
   BitzaUpdate,
   Category,
+  Checkout,
   FuzzyState,
+  StockLog,
   StockMode,
   TeamListItem,
 } from '../../../core/models';
+import { ConfirmDialog, ConfirmDialogData } from '../../../shared/confirm-dialog/confirm-dialog';
 
 export interface BitzaFormDialogData {
   /** Present when editing; absent (bitza) when creating. */
@@ -45,7 +55,12 @@ interface BitzaFormModel {
   category_id: string;
   description: string;
   stock_mode: StockMode | '';
-  /** Only meaningful (and only sent) when stock_mode = 'exact', create only. */
+  /**
+   * Only meaningful (and only sent) when stock_mode = 'exact' — either at
+   * creation, or as the starting value when an edit genuinely transitions
+   * into stock_mode='exact'. Never sent for an unchanged exact-mode edit
+   * (that must go through the stock-adjustments dialog instead).
+   */
   quantity: number;
   fuzzy_state: FuzzyState | '';
   vendor: string;
@@ -88,19 +103,24 @@ const STOCK_MODE_LABELS: Record<StockMode, string> = {
           }
         </mat-form-field>
 
-        @if (isEdit) {
+        @if (isEdit && kindLocked()) {
           <p class="kind-readonly">
-            Kind: <strong>{{ data?.bitza?.kind }}</strong> (fixed at creation)
+            Type: <strong>{{ kindLabel(data?.bitza?.kind) }}</strong> (locked — {{ lockReason() }})
           </p>
         } @else {
           <mat-form-field appearance="outline" class="full-width">
-            <mat-label>Kind</mat-label>
+            <mat-label>Type</mat-label>
             <mat-select [formField]="bitzaForm.kind">
               @for (option of kindOptions; track option.value) {
                 <mat-option [value]="option.value">{{ option.label }}</mat-option>
               }
             </mat-select>
           </mat-form-field>
+          @if (isEdit && bitzaForm.kind().value() !== data?.bitza?.kind) {
+            <p class="kind-hint">
+              Changing type can affect checkout or stock-tracking history views.
+            </p>
+          }
         }
 
         <mat-form-field appearance="outline" class="full-width">
@@ -128,9 +148,9 @@ const STOCK_MODE_LABELS: Record<StockMode, string> = {
         </mat-form-field>
 
         @if (bitzaForm.kind().value() === 'stock') {
-          @if (isEdit) {
+          @if (isEdit && stockModeLocked()) {
             <p class="stock-mode-readonly">
-              Stock tracking: <strong>{{ stockModeLabel() }}</strong> (fixed at creation)
+              Stock tracking: <strong>{{ stockModeLabel() }}</strong> (locked — {{ lockReason() }})
             </p>
           } @else {
             <mat-form-field appearance="outline" class="full-width">
@@ -159,7 +179,7 @@ const STOCK_MODE_LABELS: Record<StockMode, string> = {
             </mat-form-field>
           }
 
-          @if (!isEdit && bitzaForm.stock_mode().value() === 'exact') {
+          @if (showStartingQuantity()) {
             <mat-form-field appearance="outline" class="full-width">
               <mat-label>Starting quantity</mat-label>
               <input matInput type="number" [formField]="bitzaForm.quantity" />
@@ -223,6 +243,12 @@ const STOCK_MODE_LABELS: Record<StockMode, string> = {
       margin: 0 0 1rem;
     }
 
+    .kind-hint {
+      color: var(--mat-sys-on-surface-variant);
+      font-size: 0.8125rem;
+      margin: -0.5rem 0 1rem;
+    }
+
     .acquisition-panel {
       margin-top: 0.5rem;
     }
@@ -234,9 +260,110 @@ export class BitzaFormDialog {
   protected readonly data = inject<BitzaFormDialogData>(MAT_DIALOG_DATA, { optional: true });
   private readonly teamService = inject(TeamService);
   private readonly categoryService = inject(CategoryService);
+  private readonly checkoutService = inject(CheckoutService);
+  private readonly stockService = inject(StockService);
+  private readonly dialog = inject(MatDialog);
 
   protected readonly kindOptions = KIND_OPTIONS;
   protected readonly isEdit = !!this.data?.bitza;
+
+  protected kindLabel(kind: BitzaKind | undefined): string {
+    return kind ? (KIND_OPTIONS.find((o) => o.value === kind)?.label ?? kind) : '';
+  }
+
+  private transitionMessage(value: BitzaFormModel): string {
+    const name = this.data?.bitza?.name ?? 'this bitza';
+    const oldKind = this.data?.bitza?.kind;
+    if (value.kind !== oldKind) {
+      return (
+        `Change "${name}" from ${this.kindLabel(oldKind)} to ${this.kindLabel(value.kind)}? ` +
+        `Checkout and stock-tracking fields specific to the old type will be cleared.`
+      );
+    }
+    // Same kind ('stock') — only stock_mode is moving.
+    const from = STOCK_MODE_LABELS[this.data?.bitza?.stock_mode ?? 'exact'];
+    const to = STOCK_MODE_LABELS[value.stock_mode as StockMode];
+    return `Change how "${name}" tracks stock, from ${from} to ${to}?`;
+  }
+
+  /** True only for the one kind/stock_mode combination that can ever
+   * have orphanable history: an exact-mode stock bitza (adjustments) or
+   * a mobile bitza (checkouts). Fixed bitzas and fuzzy-mode stock never
+   * need the check — there's nothing there to protect. */
+  private needsHistoryCheck(bitza: Bitza): boolean {
+    return bitza.kind === 'mobile' || (bitza.kind === 'stock' && bitza.stock_mode === 'exact');
+  }
+
+  private wasAlreadyExact(): boolean {
+    return this.data?.bitza?.kind === 'stock' && this.data?.bitza?.stock_mode === 'exact';
+  }
+
+  private historyCount$(bitza: Bitza): Observable<number> {
+    const rows$: Observable<Checkout[] | StockLog[]> =
+      bitza.kind === 'mobile'
+        ? this.checkoutService.history(bitza.id)
+        : this.stockService.history(bitza.id);
+    return rows$.pipe(
+      map((rows) => rows.length),
+      catchError(() => of(0)),
+    );
+  }
+
+  /**
+   * How many history rows (checkouts, or stock adjustments) exist for
+   * the bitza being edited — mirrors BitzaService.update_bitza's
+   * history guards on the backend, checked here too so the form can
+   * lock the field and explain why up front, rather than let someone
+   * fill out a whole edit only to hit a 409 on submit. undefined while
+   * loading (treated as locked, the safe default) or when no check is
+   * needed at all.
+   */
+  private readonly historyCountResult = toSignal(
+    this.isEdit && this.data?.bitza && this.needsHistoryCheck(this.data.bitza)
+      ? this.historyCount$(this.data.bitza)
+      : of(0),
+    { initialValue: undefined },
+  );
+
+  protected readonly kindLocked = computed(() => {
+    const bitza = this.data?.bitza;
+    if (!this.isEdit || !bitza || !this.needsHistoryCheck(bitza)) {
+      return false;
+    }
+    const count = this.historyCountResult();
+    return count === undefined || count > 0;
+  });
+
+  protected readonly stockModeLocked = computed(() => {
+    if (!this.isEdit || !this.wasAlreadyExact()) {
+      return false;
+    }
+    const count = this.historyCountResult();
+    return count === undefined || count > 0;
+  });
+
+  protected readonly lockReason = computed(() => {
+    const count = this.historyCountResult();
+    if (count === undefined) {
+      return 'checking history…';
+    }
+    const noun = this.data?.bitza?.kind === 'mobile' ? 'checkout' : 'stock adjustment';
+    return `${count} ${noun}${count === 1 ? '' : 's'} on record`;
+  });
+
+  /** Starting-quantity input shows on create, and on edit only when
+   * genuinely moving into stock_mode='exact' for the first time —
+   * never while merely staying exact (that must go through
+   * POST .../stock-adjustments instead). */
+  protected readonly showStartingQuantity = computed(() => {
+    if (
+      this.bitzaForm.kind().value() !== 'stock' ||
+      this.bitzaForm.stock_mode().value() !== 'exact'
+    ) {
+      return false;
+    }
+    return !this.isEdit || !this.wasAlreadyExact();
+  });
 
   /**
    * Read-only label for edit mode — see the stock_mode-inert-during-edit
@@ -294,7 +421,8 @@ export class BitzaFormDialog {
         );
         applyWhen(
           path,
-          (ctx) => !this.isEdit && ctx.valueOf(path.stock_mode) === 'exact',
+          (ctx) =>
+            ctx.valueOf(path.stock_mode) === 'exact' && (!this.isEdit || !this.wasAlreadyExact()),
           (path) => {
             required(path.quantity, { message: 'Starting quantity is required' });
             min(path.quantity, 0, { message: 'Quantity cannot be negative' });
@@ -319,9 +447,42 @@ export class BitzaFormDialog {
           purchase_date: value.purchase_date || undefined,
           order_url: value.order_url || undefined,
         };
-        if (value.kind === 'stock' && value.stock_mode === 'fuzzy') {
+
+        const oldKind = this.data?.bitza?.kind;
+        const kindChanged = value.kind !== oldKind;
+        const stockModeChanged =
+          oldKind === 'stock' && value.stock_mode !== this.data?.bitza?.stock_mode;
+        const isTransition = kindChanged || stockModeChanged;
+
+        if (isTransition) {
+          if (kindChanged) {
+            update.kind = value.kind;
+          }
+          if (value.kind === 'stock') {
+            update.stock_mode = value.stock_mode as StockMode;
+            if (value.stock_mode === 'exact') {
+              update.quantity = value.quantity;
+            } else if (value.stock_mode === 'fuzzy') {
+              update.fuzzy_state = value.fuzzy_state as FuzzyState;
+            }
+          }
+
+          const confirmData: ConfirmDialogData = {
+            title: 'Change type?',
+            message: this.transitionMessage(value),
+            confirmLabel: 'Change type',
+          };
+          const dialogRef = this.dialog.open(ConfirmDialog, { width: '420px', data: confirmData });
+          const confirmed = await firstValueFrom(dialogRef.afterClosed());
+          if (!confirmed) {
+            return undefined;
+          }
+        } else if (value.kind === 'stock' && value.stock_mode === 'fuzzy') {
+          // No transition — just an ordinary edit of the starting fuzzy
+          // state while staying in fuzzy mode.
           update.fuzzy_state = value.fuzzy_state as FuzzyState;
         }
+
         this.dialogRef.close({ mode: 'edit', value: update });
         return undefined;
       }

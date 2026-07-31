@@ -334,18 +334,94 @@ class BitzaService:
             bitza.purchase_date = data.purchase_date
         if data.order_url is not None:
             bitza.order_url = data.order_url
-        if data.low_stock_threshold is not None:
-            bitza.low_stock_threshold = data.low_stock_threshold
-        if data.fuzzy_state is not None:
-            if bitza.kind != BitzaKind.stock or bitza.stock_mode != StockMode.fuzzy:
+
+        # A change is only treated as a "transition" (subject to the
+        # history guards below) if kind or stock_mode is actually
+        # different from what's already persisted — re-sending the
+        # current value alongside an unrelated field edit is a no-op
+        # here, not a transition attempt.
+        kind_changing = data.kind is not None and data.kind != bitza.kind
+        stock_mode_changing = data.stock_mode is not None and (
+            bitza.kind != BitzaKind.stock or data.stock_mode != bitza.stock_mode
+        )
+
+        if kind_changing or stock_mode_changing:
+            old_kind = bitza.kind
+            old_stock_mode = bitza.stock_mode
+            new_kind = data.kind if data.kind is not None else bitza.kind
+
+            if data.kind is None and old_kind != BitzaKind.stock:
+                # stock_mode was sent without kind, on a bitza that isn't
+                # already stock — schema validation alone can't catch
+                # this (it has no access to the persisted kind), so it's
+                # rejected here rather than silently doing nothing.
                 raise ConflictError(
-                    "fuzzy_state can only be set on a bitza with kind='stock' and "
-                    "stock_mode='fuzzy'"
+                    "stock_mode can only be set directly when the bitza is "
+                    "already kind='stock' — include kind='stock' in the same "
+                    "request to make it stock"
                 )
-            bitza.fuzzy_state = data.fuzzy_state
+
+            was_exact = old_kind == BitzaKind.stock and old_stock_mode == StockMode.exact
+            becomes_exact = new_kind == BitzaKind.stock and data.stock_mode == StockMode.exact
+
+            if old_kind == BitzaKind.mobile and new_kind != BitzaKind.mobile:
+                if self._checkouts.list_for_bitza(bitza.id):
+                    raise ConflictError(
+                        "Can't change type away from 'mobile' — this bitza has "
+                        "checkout history"
+                    )
+
+            if was_exact and not becomes_exact:
+                if self._stock_logs.list_for_bitza(bitza.id):
+                    raise ConflictError(
+                        "Can't change stock tracking away from 'exact' — this "
+                        "bitza has a stock adjustment history"
+                    )
+
+            if new_kind != BitzaKind.stock:
+                bitza.kind = new_kind
+                bitza.stock_mode = None
+                bitza.quantity = None
+                bitza.fuzzy_state = None
+                bitza.low_stock_threshold = None
+            else:
+                bitza.kind = BitzaKind.stock
+                bitza.stock_mode = data.stock_mode
+                if data.stock_mode == StockMode.exact:
+                    bitza.quantity = data.quantity
+                    bitza.fuzzy_state = None
+                    if data.low_stock_threshold is not None:
+                        bitza.low_stock_threshold = data.low_stock_threshold
+                else:
+                    bitza.fuzzy_state = data.fuzzy_state
+                    bitza.quantity = None
+                    bitza.low_stock_threshold = None
+
+            if kind_changing:
+                summary = f"Changed type from '{old_kind.value}' to '{new_kind.value}'"
+                if new_kind == BitzaKind.stock:
+                    summary += f" (stock_mode={bitza.stock_mode.value})"
+            else:
+                # kind is unchanged (and must already be 'stock' — see
+                # the guard above); only stock_mode moved.
+                summary = (
+                    f"Changed stock tracking from '{old_stock_mode.value}' to "
+                    f"'{bitza.stock_mode.value}'"
+                )
+            self._write_audit("bitza", bitza_id, "CHANGE_KIND", actor.id, summary)
+        else:
+            if data.low_stock_threshold is not None:
+                bitza.low_stock_threshold = data.low_stock_threshold
+            if data.fuzzy_state is not None:
+                if bitza.kind != BitzaKind.stock or bitza.stock_mode != StockMode.fuzzy:
+                    raise ConflictError(
+                        "fuzzy_state can only be set on a bitza with kind='stock' and "
+                        "stock_mode='fuzzy'"
+                    )
+                bitza.fuzzy_state = data.fuzzy_state
+            self._write_audit("bitza", bitza_id, "UPDATE", actor.id, f"Updated '{bitza.name}'")
 
         updated = self._bitzas.update(bitza)
-        self._write_audit("bitza", bitza_id, "UPDATE", actor.id, f"Updated '{bitza.name}'")
         self._db.commit()
         return self._enrich_bitza(updated, root_id=self._get_root_bitza_id())
 

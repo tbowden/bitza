@@ -184,6 +184,12 @@ def update_bitza(
     Ordinary, single-row edit — never cascades, regardless of kind, even
     if responsible_team_id is included. Use POST /{bitza_id}/reassign-team
     for an explicit cascade scope and a dedicated audit trail entry.
+
+    kind (and, independently, stock_mode on an already-stock bitza) is
+    conditionally editable — see BitzaService.update_bitza for the
+    checkout/stock-log history guards. A 409 means the requested
+    transition would orphan history that only makes sense under the old
+    kind/stock_mode.
     """
     return svc.update_bitza(bitza_id=bitza_id, data=body, actor=current_user)
 

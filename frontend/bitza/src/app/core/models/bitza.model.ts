@@ -141,13 +141,25 @@ export interface BitzaCreate {
   order_url?: string;
 }
 
+/**
+ * kind (and, independently, stock_mode on an already-stock bitza) IS
+ * conditionally editable — see BitzaService.update_bitza on the
+ * backend for the checkout/stock-log history guards this can 409
+ * against. quantity is otherwise NOT editable here — ongoing exact-
+ * mode changes must go through POST /bitzas/{id}/stock-adjustments;
+ * it's only valid here as the starting value for a transition into
+ * stock_mode='exact'.
+ */
 export interface BitzaUpdate {
   name?: string;
+  kind?: BitzaKind;
   parent_id?: string | null;
   responsible_team_id?: string;
   category_id?: string | null;
   description?: string | null;
   tags?: string[];
+  stock_mode?: StockMode;
+  quantity?: number;
   low_stock_threshold?: number;
   fuzzy_state?: FuzzyState;
   vendor?: string;

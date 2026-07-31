@@ -194,7 +194,7 @@ import { ImageGallery } from '../image-gallery/image-gallery';
 
       <div class="filters-row">
         <mat-form-field appearance="outline" class="filter-field">
-          <mat-label>Kind</mat-label>
+          <mat-label>Type</mat-label>
           <mat-select [value]="filterKind()" (selectionChange)="filterKind.set($event.value)">
             <mat-option value="">All</mat-option>
             <mat-option value="fixed">Fixed</mat-option>
