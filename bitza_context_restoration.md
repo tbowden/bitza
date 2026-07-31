@@ -35,12 +35,15 @@ the same schema. Backend: FastAPI + SQLite. Frontend: Angular 22 + Angular Mater
 | **1** | Auth, users, roles (superuser/admin/user), JWT refresh/rotation, password policy | ✅ Done, tested, untouched since |
 | **2** | Unified `Team`/`Bitza` backend model | ✅ Done, tested (58/58 passing) |
 | **3** | Angular frontend | 🟡 All 5 planned milestones built (Foundation, Teams, Bitzas core, Bitza actions, Admin & polish) — see caveats below; the frontend/backend schema-drift caveat that used to be here is now resolved (see Stage 4) |
-| **4** | Frontend/backend schema reconciliation + completeness pass | ✅ Done — 16 patches (`bitza_schema_reconciliation_todo.md`), applied and pushed. Two new, undecided design questions came out of it (a personal `/me` landing page, `kind` editability/labelling) — not started, see that doc's "New design questions raised" section |
+| **4** | Frontend/backend schema reconciliation + completeness pass | ✅ Done — 16 patches (`bitza_schema_reconciliation_todo.md`), applied and pushed. Both design questions that came out of it — a personal `/me` landing page, `kind` editability/labelling — are also done, tested, applied, and pushed. That doc is now a fully historical record; nothing in it is outstanding |
+| **5** | Post-reconciliation fixes | 🔲 Not started — four items, see `bitza_open_issues.md`: login should land on `/me` (a gap in Stage 4's own routing plan that didn't ship), root bitza needs locking down to name-only/admin-only, stock bitzas shouldn't be able to have children, and the Team/Project naming question is now decided ("Project") but not yet implemented |
 
 **Stage 3 caveats — read before continuing frontend work:**
 
 - **This has not had a live QA / click-through pass.** Everything has been
-  verified via `ng build` and `ng test` (35 passing unit tests, all at the
+  verified via `ng build` and `ng test` (35 passing unit tests at Stage 3's
+  original completion, grown to 42 since — see `bitza_frontend_context.md`'s
+  Testing state section for the current count, all still at the
   service layer) in a sandboxed environment with no real backend to talk
   to and no browser to actually click through. Nothing has been visually
   confirmed to render or behave correctly against a live API.
@@ -66,10 +69,12 @@ the same schema. Backend: FastAPI + SQLite. Frontend: Angular 22 + Angular Mater
   history. The `GET /api/v1/users/` permission question is resolved too
   (it's genuinely admin-gated; fixed via a new, narrower
   `/users/directory` endpoint rather than relaxing that gate).
-  **Two new design questions came out of this work and are not yet
-  decided or built — a personal `/me` landing page, and `kind`
-  editability/labelling — see that same doc's "New design questions
-  raised" section before starting new frontend work.**
+  **The two design questions that came out of this work — a personal
+  `/me` landing page, and `kind` editability/labelling — are also both
+  now done, tested, applied, and pushed.** See that same doc's "New
+  design questions raised" section for what shipped, and
+  `bitza_open_issues.md` for four new items that came out of finishing
+  this stage (Stage 5 above).
 - **Component templates/styles are inconsistent.** Milestones 1–4 use
   inline `template`/`styles`; Milestone 5 (Users, Audit) uses external
   `.html`/`.scss` files, which is now the stated convention going forward
@@ -112,7 +117,8 @@ bitza/
 ├── bitza_project_context.md         ← full backend design doc, API contract
 ├── bitza_context_restoration.md     ← this file
 ├── bitza_frontend_context.md        ← full frontend design doc — READ THIS for any frontend work
-├── bitza_schema_reconciliation_todo.md  ← active task: confirmed frontend/backend field drift, fix this first
+├── bitza_schema_reconciliation_todo.md  ← historical record, fully done — read bitza_open_issues.md instead
+├── bitza_open_issues.md             ← active task: four new items post-reconciliation, fix these next
 ├── backend/
 │   ├── AI_instructions.md
 │   ├── ARCHITECTURAL_OVERVIEW.md
@@ -134,7 +140,7 @@ bitza/
             │   ├── models/           one file per API entity + index.ts barrel
             │   ├── services/         one per resource, @Service() decorator, HttpClient-based
             │   ├── interceptors/     auth.interceptor.ts (401 → refresh → retry)
-            │   └── guards/           auth.guard.ts, admin.guard.ts
+            │   └── guards/           auth.guard.ts, admin.guard.ts, redirect-to-root.guard.ts
             ├── shared/
             │   └── confirm-dialog/   reusable destructive-action confirmation
             ├── shell/
@@ -145,6 +151,7 @@ bitza/
                 ├── bitzas/           browser (tree nav), form/retire/reassign dialogs,
                 │                     checkout/stock/image sections + their dialogs,
                 │                     category manager
+                ├── me/               personal landing page (checked-out items, your teams)
                 ├── users/            admin-only list + form dialog
                 └── audit/            admin-only log view
 ```
@@ -174,10 +181,14 @@ categories, users (admin), and the audit log.
 
 - **Full backend domain model, every schema/endpoint shape, and the
   reasoning behind each design decision** → `bitza_project_context.md`
-- **Confirmed frontend/backend field drift — several likely-broken
-  features (Create User, Suspend, Checkout display, Team member names,
-  Audit log), fix this before other frontend work** →
-  `bitza_schema_reconciliation_todo.md`
+- **Active task: four items to fix next** (login should land on `/me`,
+  root bitza needs locking down to name-only/admin-only, stock bitzas
+  shouldn't be able to have children, Team/Project naming decided but not
+  yet implemented) → `bitza_open_issues.md`
+- **Historical record of the frontend/backend field-drift fix and the
+  two design questions it raised** (both now built) →
+  `bitza_schema_reconciliation_todo.md` — nothing left to do here, but
+  useful context for *why* things are shaped the way they are
 - **Full frontend architecture: what's built, conventions, Signal Forms
   usage notes, known assumptions needing backend confirmation, testing
   state, and outstanding work** → `bitza_frontend_context.md`

@@ -1,16 +1,23 @@
 # Bitza — frontend/backend schema reconciliation
 
-**Status: the schema-reconciliation work below is done.** 16 patches
-(`0001`–`0016`), applied and pushed. Everything in "Confirmed
-likely-broken" and "Confirmed missing but harmless" is resolved. What's
-left, and what's new: the inert `stock_mode` dropdown (still open), the
-`get_ancestors` endpoint (still just a suggestion), and two new design
-questions raised after review — a personal `/me` landing page, and
-`kind` editability/labelling — both below in their own section, neither
-implemented yet. **If you're picking this up fresh, skip straight to
-"New design questions raised" and "Suggested approach for the new
-chat" at the bottom; the rest of this doc is now a historical record of
-what was found and fixed, kept for context.**
+**Status: COMPLETE.** 16 patches (`0001`–`0016`), applied and pushed.
+Everything in "Confirmed likely-broken" and "Confirmed missing but
+harmless" is resolved. The two follow-on items this doc originally left
+open — the inert `stock_mode` dropdown and the unexposed `get_ancestors`
+capability — are also both done now (see "Not a bug" section below for
+`get_ancestors`; the `stock_mode` fix was folded into and then superseded
+by the `kind` editability work described next). The two new design
+questions raised after review — a personal `/me` landing page, and `kind`
+editability/labelling — are **both built**, tested, applied, and pushed;
+see "New design questions raised" below, now updated to reflect what
+shipped for each.
+
+**This entire document is historical record at this point — nothing here
+is outstanding work.** If you're picking up fresh work on this project,
+go straight to `bitza_open_issues.md` instead, which covers what came out
+of this doc's completion (four new items: login landing page, root bitza
+lockdown, stock-can't-have-children, and settling the Team/Project naming
+question).
 
 For full project orientation, see `bitza_context_restoration.md`; for
 frontend architecture generally, see `bitza_frontend_context.md`. This
@@ -113,8 +120,7 @@ by reading source on both sides, not by reproducing the failure.
 
 ## Confirmed missing but harmless — completeness pass, lower urgency
 
-**✅ Resolved, except the `stock_mode` dropdown item (still open — see
-below).** Patches `0010`–`0016`. Two real, live bugs were found *while*
+**✅ Fully resolved.** Patches `0010`–`0016`. Two real, live bugs were found *while*
 doing this pass, both from properly splitting list-response types from
 detail-response types (the frontend had been using one type for both,
 which papered over the fact the backend deliberately sends less data to
@@ -159,54 +165,64 @@ the missing fields directly.
   from `user_id`/`team_id`) — not currently used for anything and routing
   doesn't need it (confirmed — see #4 above), but worth capturing for
   accuracy.
-- **⏳ Still open.** **`BitzaFormDialog`'s "Stock tracking" dropdown is
-  interactive but inert during edit.** The `stock_mode` `<mat-select>` is
-  shown (and editable) whenever `kind === 'stock'`, regardless of
-  `isEdit` — but the edit submit handler never includes `stock_mode` in
-  the `BitzaUpdate` payload,
-  correctly, since the backend has no such field there: `BitzaUpdate`'s
-  own docstring says *"kind is intentionally NOT editable — converting a
-  fixed location into a checkoutable tool (or vice versa) is a
-  re-creation, not an update,"* and `stock_mode` is tied to `kind` the
-  same way. An admin can flip the dropdown mid-edit, see no error, and
-  reasonably believe they've changed how the stock is tracked — nothing
-  actually changes on save. Not currently breaking anything (the rest of
-  the edit still submits fine), but misleading. Found while fixing the
-  `quantity` bug below; not fixed yet. Likely fix: disable the control
-  (`[disabled]="isEdit"`) or hide it entirely on edit, matching the
-  `kind`-is-readonly treatment already used just above it in the same
-  form. **Note:** a new design question raised after this was logged
-  ("New design questions raised" below, `kind` editability) may change
-  what the right fix here actually is — if `kind` becomes genuinely
-  editable, `stock_mode` needs to become properly editable alongside it
-  rather than just disabled; read that section before implementing the
-  "disable it" fix suggested above.
+- **✅ Resolved — superseded by `kind` editability.** **`BitzaFormDialog`'s
+  "Stock tracking" dropdown was interactive but inert during edit.** The
+  `stock_mode` `<mat-select>` was shown (and editable) whenever
+  `kind === 'stock'`, regardless of `isEdit`, but the edit submit handler
+  never included `stock_mode` in the `BitzaUpdate` payload — an admin
+  could flip the dropdown mid-edit, see no error, and reasonably believe
+  they'd changed how the stock was tracked, with nothing actually
+  changing on save. Fixed in two stages: first a quick "hide it entirely
+  on edit, matching the `kind`-is-readonly treatment" patch (matching
+  what this section originally suggested), then fully superseded by the
+  `kind` editability work below — `stock_mode` is now genuinely editable
+  (independently of `kind`), gated by the same checkout/stock-log history
+  guards, with the frontend locking the control and explaining why only
+  when there's real history to protect. See "New design questions
+  raised" → B below for what actually shipped.
 
 ---
 
 ## Not a bug — an unexposed backend capability worth considering
 
-**⏳ Still open — not started.**
+**✅ Resolved.**
 
-`BitzaRepository.get_ancestors()` (a recursive CTE, used internally only
-for `update_bitza`'s cycle-detection check) already computes exactly the
-ancestor chain the frontend's breadcrumb needs — but there's no endpoint
-exposing it. `BitzaBrowser`'s breadcrumb currently rebuilds this via N
-sequential `GET /bitzas/{id}` calls (RxJS `expand`) walking `parent_id`
-one hop at a time. If a lightweight `GET /bitzas/{id}/ancestors`-style
-endpoint were added, the frontend could replace that with one call. Not
-urgent, but a clean, low-risk win if this area gets touched anyway.
+`BitzaRepository.get_ancestors()` (a recursive CTE, previously used
+internally only for `update_bitza`'s cycle-detection check) already
+computed exactly the ancestor chain the frontend's breadcrumb needs — it
+just wasn't exposed as an endpoint. Now it is:
+`GET /bitzas/{id}/ancestors` (nearest parent first, root last, excludes
+the bitza itself). `BitzaBrowser`'s breadcrumb no longer rebuilds this via
+N sequential `GET /bitzas/{id}` calls (the old RxJS `expand` walk) — one
+call now.
 
-## New design questions raised — not yet decided, nothing built
+## New design questions raised — both now decided and built
 
-Two things raised after reviewing the reconciliation work above. Neither
-has been implemented. Both need a decision before work starts, not just
-a fix — flagged here rather than as a "confirmed broken" item since
-there's no bug, just a product/design call to make.
+Two things raised after reviewing the reconciliation work above. Both
+needed a decision before work started, not just a fix — kept here rather
+than as a "confirmed broken" item since there was no bug, just a
+product/design call to make. Both are now built; each subsection below
+has been updated with a resolution note at the top.
 
 ### A. Personal landing page (`/me`) — replace the root-bitza default
 
-**The ask:** logging in currently drops you straight into the root of
+**✅ Built.** `GET /checkouts/mine` (top-level resource, not nested under
+`/bitzas/{id}` — scoped to a holder across the whole tree, not to one
+bitza) and `GET /teams/mine` (team name + `is_primary` in one call) were
+added, plus a `/me` route and `MePage` component: "checked out to you"
+(with a check-in action reusing the existing `CheckinDialog`) and
+"{{ Teams }} you're on" (primary starred). Low-stock alerts and a "recent
+activity" feed were both explicitly left out, as flagged below — neither
+was decided as wanted, and low-stock alerts really would have been
+starting from zero.
+
+**⚠️ One thing from this section's own routing note did *not* actually
+ship:** "change the default (`''`) redirect target from `bitzas` to
+`me`" was never done — `/me` was added as a new route and nav link, but
+the app still lands on `/bitzas` after login. That gap is now
+`bitza_open_issues.md`'s issue #1.
+
+**The ask, as originally written, for reference:** logging in currently drops you straight into the root of
 the bitza tree (`''` → `bitzas` → root, via `redirectToRootGuard` in
 `app.routes.ts`). That should instead default to a personal overview:
 what you have checked out, what teams you're on.
@@ -283,7 +299,26 @@ login.
 
 ### B. `kind` — should it be editable, and should it be called "type"?
 
-**The ask:** `kind` is currently fixed at creation, never editable —
+**✅ Built, following the recommendation below almost exactly.**
+`kind`/`stock_mode` are now conditionally editable via `PATCH` —
+checkout-history guard for moving away from `mobile`, stock-log-history
+guard for moving away from `stock_mode='exact'` (whether to a different
+`kind` or just to `fuzzy`), the reused `BitzaCreate`-style validation for
+moving *to* `stock`, and a dedicated `CHANGE_KIND` audit action (not
+folded into the generic `UPDATE` entry). Frontend re-enables the
+`kind`/`stock_mode` selectors during edit, locks them with a reason when
+there's real history to protect (e.g. "locked — 3 checkouts on record"),
+and shows a confirmation dialog before an actual transition submits.
+Labelling was changed to "Type" in UI text only, exactly as recommended —
+`bitza.kind` is unchanged as the property name and wire format.
+
+**One gap the recommendation below didn't anticipate, found writing this
+up:** none of this checks whether a bitza already **has children** before
+letting its `kind` move *to* `stock` — and since stock bitzas shouldn't be
+able to have children at all (a separate, newly-raised rule), that's now
+its own item: `bitza_open_issues.md`'s issue #3.
+
+**The ask, as originally written, for reference:** `kind` is currently fixed at creation, never editable —
 `BitzaUpdate`'s own docstring says so explicitly: *"kind is intentionally
 NOT editable — converting a fixed location into a checkoutable tool (or
 vice versa) is a re-creation, not an update."* The concern: mistakes will
@@ -373,27 +408,21 @@ disagreement this whole document was about fixing.
 
 ## Suggested approach for the new chat
 
-The original 5-step plan here is done (schema reconciliation, the
-completeness pass, and `bitza_frontend_context.md`'s assumptions section
-— all patches `0001`–`0016`). For whoever picks this up next:
+Everything in this document — the original 5-step plan (schema
+reconciliation, the completeness pass, `bitza_frontend_context.md`'s
+assumptions section), the `stock_mode` and `get_ancestors` follow-ons,
+and both design questions above — is done, tested, applied, and pushed.
 
-1. **Decide on the two new design questions above before building
-   anything** — both need a product call (does `/me` need "recent
-   activity"? is conditional-kind-editability the right shape, or is
-   something simpler acceptable?), not just an implementation.
-2. **If proceeding with `/me`:** backend first (the new checkout-by-user
-   endpoint is the one genuinely new piece), then the frontend route +
-   component + default-redirect change.
-3. **If proceeding with `kind` editability:** backend validation first
-   (the history-guard + reused conditional-fields validator), then the
-   frontend edit-form changes — and fix the already-logged
-   `stock_mode`-inert-during-edit bug as part of the same pass, not
-   separately, since they're now the same piece of work.
-4. **`get_ancestors`** is still just sitting there as a low-risk win if
-   either of the above ends up touching `bitza-browser.ts`'s breadcrumb
-   anyway.
-5. **Still no live click-through against a running backend+frontend
-   together** — every fix in this whole document was verified via
-   `ng test`/`ng build`/`pytest`/`mypy` plus careful reading, not an
-   actual HTTP round trip. That remains the single biggest source of
-   residual risk across everything done so far.
+**For whoever picks this up next: go to `bitza_open_issues.md`.** It
+covers what came out of finishing this doc — a login-redirect gap this
+doc's own routing note called for but that didn't ship, a root-bitza
+lockdown, a stock-bitzas-can't-have-children rule, and settling the
+Team/Project naming question for good.
+
+The one thing worth repeating here since it still applies project-wide:
+**there is still no live click-through against a running backend+frontend
+together.** Every fix in this whole document, and everything built for
+the two design questions above, was verified via `ng test`/`ng
+build`/`pytest` plus careful reading, not an actual HTTP round trip. That
+remains the single biggest source of residual risk across everything
+done so far.

@@ -197,9 +197,18 @@ purposes that look different but are structurally identical:
 - **Home deployment**: one team, or a handful for distinct projects.
 
 **"Team" vs "Project" is a display-label choice, not a schema difference.**
-The database and API are named `Team` throughout — the Angular frontend
-carries a simple config that swaps the label to "Project" for home-style
-deployments. Nothing else changes.
+The database and API are named `Team` throughout, and stay that way — this
+part was never in question. **The label question itself is now settled:
+the product always calls it "Project" in the UI.** ("A team is
+indistinguishable from a project" was the reasoning — trying to
+distinguish "real teams" from "projects" added a distinction the schema
+never needed in the first place.) The frontend previously carried this as
+a runtime-configurable toggle (`AppConfigService`, defaulting to "Team");
+now that the choice is permanent rather than deployment-specific, that
+toggle is being removed in favour of just always showing "Project" — see
+`bitza_open_issues.md` for the implementation task. Nothing below this
+point changes: `Team`/`team_id`/`responsible_team_id`/`/api/v1/teams/`
+etc. remain the actual names everywhere outside the Angular UI text.
 
 ### Workshop manager is not a special role
 
@@ -539,8 +548,6 @@ should be additive rather than a refactor:
   the app) vs explicit refresh calls. Interceptor is strongly recommended.
 - **Session persistence** — does the app stay logged in across browser
   restarts? (Yes if using localStorage, no if sessionStorage.)
-- **Team vs Project label config** — where this toggle lives in the Angular
-  build (environment file vs runtime setting) hasn't been decided.
 - **Cascade-scope default heuristics** — whether the frontend infers a
   sensible default scope from a bitza's `kind` (see "Reassigning
   responsible team" above) or always asks explicitly.

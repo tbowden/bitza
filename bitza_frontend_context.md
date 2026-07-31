@@ -93,10 +93,14 @@ features/
   if any list ever needs to handle real volume.
 - **Dialogs over dedicated routes** for all create/edit/confirm flows
   (Material's `MatDialog`, CDK-based, proper focus trapping for free).
-- **Team vs Project label**: `AppConfigService` holds this as a runtime
-  signal, persisted to `localStorage`, not a build-time environment
-  value — deliberately, so a single deployment could flip the label
-  later from a settings screen (none exists yet) without a rebuild.
+- **Team vs Project label**: was a runtime signal in `AppConfigService`,
+  persisted to `localStorage` (defaulting to "Team"), deliberately not a
+  build-time environment value — so a single deployment could flip the
+  label later from a settings screen (none exists yet) without a rebuild.
+  **The label question is now settled — always "Project"** — see
+  `bitza_project_context.md`'s "Teams" section and `bitza_open_issues.md`
+  for the removal-of-the-toggle task; this bullet describes the
+  as-of-this-writing implementation, not the target state.
 - **`cascade_scope` UI defaults** (reassign-team dialog): `fixed`/`stock`
   → `none`, `mobile` → `all_descendants`, always overridable. This is
   frontend-only convenience — the backend never infers or defaults this
@@ -175,13 +179,14 @@ Angular version bumps and something stops working.
    user picker, remove, primary toggle), Team/Project label applied
    throughout.
 3. **Bitzas core** — the tree browser (`/bitzas`, `/bitzas/:id`),
-   breadcrumb built client-side by walking `parent_id` via RxJS `expand`
-   (the backend never recurses — direct-children-only reads, by design),
-   create/edit with kind-conditional fields, retire/reactivate,
-   reassign-team with cascade_scope, category management, QR label
-   generation + a `/bitza/:id` → `/bitzas/:id` redirect route matching
-   the exact singular path the docs say gets baked into printed physical
-   tags.
+   breadcrumb powered by `GET /bitzas/{id}/ancestors` (one call;
+   originally built client-side via RxJS `expand` walking `parent_id` one
+   hop at a time — replaced once the endpoint was added, see
+   `bitza_schema_reconciliation_todo.md`), create/edit with
+   kind-conditional fields, retire/reactivate, reassign-team with
+   cascade_scope, category management, QR label generation + a
+   `/bitza/:id` → `/bitzas/:id` redirect route matching the exact
+   singular path the docs say gets baked into printed physical tags.
 4. **Bitza actions** — checkout/check-in (status always derived from
    history, never a stored field, matching the backend design exactly),
    stock adjustments (in/out toggle → signed delta, live negative-result
@@ -193,6 +198,14 @@ Angular version bumps and something stops working.
    admin-on-plain-users, nobody can act on their own account), audit log
    with user/action filters, plus a dedicated accessibility pass (see
    below).
+6. **Post-reconciliation** — `/me` personal landing page (checked-out
+   items across the whole tree with a check-in action, your teams with
+   the primary one starred); `kind` editability (conditional on
+   checkout/stock-log history, confirmation dialog, "Type" as the UI
+   label); the `stock_mode`-inert-during-edit bug (superseded by the
+   above); breadcrumb switched to the new `/ancestors` endpoint. See
+   `bitza_schema_reconciliation_todo.md` for what shipped in detail, and
+   `bitza_open_issues.md` for what came out of it.
 
 ---
 
@@ -235,11 +248,12 @@ is_active) rather than relaxing the existing gate or restricting
 add-member to admins. See `bitza_schema_reconciliation_todo.md` for the
 full reasoning.
 
-**Two new, undecided design questions came out of this work** — a
-personal `/me` landing page, and whether `kind` should become editable
-(and relabelled "Type") — both written up in
-`bitza_schema_reconciliation_todo.md`'s "New design questions raised"
-section. Neither is implemented.
+**Two design questions came out of this work — both now resolved and
+built.** A personal `/me` landing page, and `kind` editability (relabelled
+"Type" in the UI). See `bitza_schema_reconciliation_todo.md`'s "New design
+questions raised" section for what actually shipped for each, and
+`bitza_open_issues.md` for four smaller items that came out of finishing
+this work.
 
 ---
 
@@ -276,10 +290,12 @@ a process risk rather than a one-off mistake:
 
 ## Testing state
 
-- **39 unit tests across 11 spec files**, all at the service layer
-  (`core/services/*.spec.ts`), using `HttpTestingController` to assert on
-  request method/URL/body/params — not component tests. (Grew from the
-  original 35/10 during the schema-reconciliation work — see
+- **42 unit tests across 11 spec files**, all at the service layer
+  (`core/services/*.spec.ts`) plus one guard spec
+  (`core/guards/redirect-to-root.guard.spec.ts`), using
+  `HttpTestingController` to assert on request method/URL/body/params —
+  not component tests. (Grew 35/10 → 39/11 during the schema-reconciliation
+  work, then → 42/11 during the `/me`/`kind`-editability work — see
   `bitza_schema_reconciliation_todo.md`.)
 - **No component-level tests exist.** Nothing exercises a component's
   template, user interactions, or rendered output.
@@ -315,12 +331,12 @@ plus a few frontend-specific scope cuts made along the way:
   authenticated-blob-fetch-per-row cost; detail-view-only for now.
 - **Cross-bitza checkout/stock dashboards** ("what's currently checked
   out" across the whole club, "recent stock activity" feed) — nothing in
-  the docs asked for this; only per-bitza history exists. **Partially
-  reconsidered** — a personal (not club-wide) version of "what's checked
-  out" is now requested as part of a `/me` landing page; see
-  `bitza_schema_reconciliation_todo.md`'s "New design questions raised"
-  section. Not built yet, and the "recent activity" half of this cut is
-  still explicitly not decided either way.
+  the docs originally asked for this; only per-bitza history exists.
+  **Partially built** — a personal (not club-wide) version of "what's
+  checked out" now exists as the `/me` landing page (see
+  `bitza_schema_reconciliation_todo.md`'s "New design questions raised" →
+  A). Still not built: low-stock alerts, and a "recent activity" feed —
+  the latter was explicitly left undecided, not just unbuilt.
 - **Component test suite, e2e suite, real accessibility audit** — see
   Testing state above.
 - **Milestone 1–4 inline-template retrofit** — see Architecture
