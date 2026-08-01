@@ -10,7 +10,6 @@ import { MatMenuModule } from '@angular/material/menu';
 import { MatSidenavModule } from '@angular/material/sidenav';
 import { MatToolbarModule } from '@angular/material/toolbar';
 import { map } from 'rxjs';
-import { AppConfigService } from '../core/services/app-config.service';
 import { AuthService } from '../core/services/auth.service';
 
 @Component({
@@ -53,7 +52,7 @@ import { AuthService } from '../core/services/auth.service';
             (click)="isHandset() && sidenav.close()"
           >
             <mat-icon matListItemIcon>groups</mat-icon>
-            <span matListItemTitle>{{ config.teamLabelPlural() }}</span>
+            <span matListItemTitle>Projects</span>
           </a>
           <a
             mat-list-item
@@ -182,7 +181,6 @@ import { AuthService } from '../core/services/auth.service';
 })
 export class AppShell {
   protected readonly authService = inject(AuthService);
-  protected readonly config = inject(AppConfigService);
   private readonly router = inject(Router);
   private readonly breakpointObserver = inject(BreakpointObserver);
 

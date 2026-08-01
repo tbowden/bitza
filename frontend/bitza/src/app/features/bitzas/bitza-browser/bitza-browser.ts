@@ -14,7 +14,6 @@ import { MatSelectModule } from '@angular/material/select';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatTableModule } from '@angular/material/table';
 import { combineLatest, catchError, map, of, switchMap } from 'rxjs';
-import { AppConfigService } from '../../../core/services/app-config.service';
 import { AuthService } from '../../../core/services/auth.service';
 import { BitzaService } from '../../../core/services/bitza.service';
 import { CategoryService } from '../../../core/services/category.service';
@@ -110,7 +109,7 @@ import { ImageGallery } from '../image-gallery/image-gallery';
               <p>{{ bitza.description }}</p>
             }
             <p>
-              {{ config.teamLabelSingular() }} responsible:
+              Project responsible:
               <strong>{{ bitza.responsible_team_name }}</strong>
             </p>
             @if (bitza.category_id) {
@@ -168,7 +167,7 @@ import { ImageGallery } from '../image-gallery/image-gallery';
             @if (!bitza.is_root) {
               <button mat-button type="button" (click)="onReassignTeam(bitza)">
                 <mat-icon>swap_horiz</mat-icon>
-                Reassign {{ config.teamLabelSingular().toLowerCase() }}
+                Reassign project
               </button>
               <button mat-button type="button" (click)="onMove(bitza)">
                 <mat-icon>drive_file_move</mat-icon>
@@ -230,7 +229,7 @@ import { ImageGallery } from '../image-gallery/image-gallery';
         </mat-form-field>
 
         <mat-form-field appearance="outline" class="filter-field">
-          <mat-label>{{ config.teamLabelSingular() }}</mat-label>
+          <mat-label>Project</mat-label>
           <mat-select [value]="filterTeamId()" (selectionChange)="filterTeamId.set($event.value)">
             <mat-option value="">All</mat-option>
             @for (team of teams(); track team.id) {
@@ -362,7 +361,6 @@ import { ImageGallery } from '../image-gallery/image-gallery';
   `,
 })
 export class BitzaBrowser {
-  protected readonly config = inject(AppConfigService);
   protected readonly authService = inject(AuthService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);

@@ -11,7 +11,6 @@ import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatTableModule } from '@angular/material/table';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { catchError, of, switchMap } from 'rxjs';
-import { AppConfigService } from '../../../core/services/app-config.service';
 import { TeamService } from '../../../core/services/team.service';
 import { Team, TeamMember } from '../../../core/models';
 import { ConfirmDialog, ConfirmDialogData } from '../../../shared/confirm-dialog/confirm-dialog';
@@ -36,13 +35,11 @@ import { TeamFormDialog, TeamFormResult } from '../team-form-dialog/team-form-di
   template: `
     <a routerLink="/teams" class="back-link">
       <mat-icon>arrow_back</mat-icon>
-      Back to {{ config.teamLabelPlural().toLowerCase() }}
+      Back to projects
     </a>
 
     @if (loadError()) {
-      <p class="error-text" role="alert">
-        Couldn't load this {{ config.teamLabelSingular().toLowerCase() }}.
-      </p>
+      <p class="error-text" role="alert">Couldn't load this project.</p>
     } @else if (team(); as team) {
       <div class="page-header">
         <div>
@@ -180,7 +177,6 @@ import { TeamFormDialog, TeamFormResult } from '../team-form-dialog/team-form-di
   `,
 })
 export class TeamDetail {
-  protected readonly config = inject(AppConfigService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   private readonly teamService = inject(TeamService);
@@ -250,9 +246,7 @@ export class TeamDetail {
   protected onDeleteTeam(team: Team): void {
     const data: ConfirmDialogData = {
       title: `Delete ${team.name}?`,
-      message: `This can't be undone. It will fail if any bitza is still responsible-to this ${this.config
-        .teamLabelSingular()
-        .toLowerCase()}.`,
+      message: `This can't be undone. It will fail if any bitza is still responsible-to this project.`,
       confirmLabel: 'Delete',
       destructive: true,
     };
@@ -266,9 +260,7 @@ export class TeamDetail {
         error: (err: HttpErrorResponse) => {
           if (err.status === 409) {
             this.snackBar.open(
-              `Can't delete — one or more bitzas are still responsible to this ${this.config
-                .teamLabelSingular()
-                .toLowerCase()}.`,
+              "Can't delete — one or more bitzas are still responsible to this project.",
               'Dismiss',
               { duration: 6000 },
             );

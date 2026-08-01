@@ -13,7 +13,6 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
 import { Observable, catchError, firstValueFrom, map, of } from 'rxjs';
-import { AppConfigService } from '../../../core/services/app-config.service';
 import { CategoryService } from '../../../core/services/category.service';
 import { CheckoutService } from '../../../core/services/checkout.service';
 import { StockService } from '../../../core/services/stock.service';
@@ -140,7 +139,7 @@ const STOCK_MODE_LABELS: Record<StockMode, string> = {
           }
 
           <mat-form-field appearance="outline" class="full-width">
-            <mat-label>{{ config.teamLabelSingular() }} responsible</mat-label>
+            <mat-label>Project responsible</mat-label>
             <mat-select [formField]="bitzaForm.responsible_team_id">
               @for (team of teams(); track team.id) {
                 <mat-option [value]="team.id">{{ team.name }}</mat-option>
@@ -149,7 +148,7 @@ const STOCK_MODE_LABELS: Record<StockMode, string> = {
             @if (
               bitzaForm.responsible_team_id().touched() && bitzaForm.responsible_team_id().invalid()
             ) {
-              <mat-error>{{ config.teamLabelSingular() }} is required.</mat-error>
+              <mat-error>Project is required.</mat-error>
             }
           </mat-form-field>
 
@@ -278,7 +277,6 @@ const STOCK_MODE_LABELS: Record<StockMode, string> = {
   `,
 })
 export class BitzaFormDialog {
-  protected readonly config = inject(AppConfigService);
   protected readonly dialogRef = inject(MatDialogRef<BitzaFormDialog, BitzaFormResult>);
   protected readonly data = inject<BitzaFormDialogData>(MAT_DIALOG_DATA, { optional: true });
   private readonly teamService = inject(TeamService);
@@ -442,7 +440,7 @@ export class BitzaFormDialog {
 
   protected readonly bitzaForm = form(this.model, (path) => {
     required(path.name, { message: 'Name is required' });
-    required(path.responsible_team_id, { message: 'Responsible team is required' });
+    required(path.responsible_team_id, { message: 'Responsible project is required' });
 
     applyWhen(
       path,

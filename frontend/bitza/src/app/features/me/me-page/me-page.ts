@@ -9,7 +9,6 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { catchError, of, switchMap } from 'rxjs';
-import { AppConfigService } from '../../../core/services/app-config.service';
 import { AuthService } from '../../../core/services/auth.service';
 import { CheckoutService } from '../../../core/services/checkout.service';
 import { TeamService } from '../../../core/services/team.service';
@@ -85,18 +84,16 @@ import { CheckinDialog } from '../../bitzas/checkin-dialog/checkin-dialog';
     </section>
 
     <section aria-labelledby="teams-heading">
-      <h2 id="teams-heading">{{ config.teamLabelPlural() }} you're on</h2>
+      <h2 id="teams-heading">Projects you're on</h2>
 
       @if (membershipsError()) {
-        <p class="error-text" role="alert">
-          Couldn't load your {{ config.teamLabelPlural().toLowerCase() }}. Try refreshing.
-        </p>
+        <p class="error-text" role="alert">Couldn't load your projects. Try refreshing.</p>
       } @else if (membershipsLoading()) {
         <div class="loading-row">
           <mat-progress-spinner diameter="28" mode="indeterminate"></mat-progress-spinner>
         </div>
       } @else if (memberships().length === 0) {
-        <p>You're not on any {{ config.teamLabelPlural().toLowerCase() }} yet.</p>
+        <p>You're not on any projects yet.</p>
       } @else {
         <ul class="team-list">
           @for (membership of memberships(); track membership.team_id) {
@@ -105,8 +102,8 @@ import { CheckinDialog } from '../../bitzas/checkin-dialog/checkin-dialog';
               @if (membership.is_primary) {
                 <mat-icon
                   class="primary-star"
-                  aria-label="Your primary team"
-                  matTooltip="Primary team"
+                  aria-label="Your primary project"
+                  matTooltip="Primary project"
                   >star</mat-icon
                 >
               }
@@ -182,7 +179,6 @@ import { CheckinDialog } from '../../bitzas/checkin-dialog/checkin-dialog';
   `,
 })
 export class MePage {
-  protected readonly config = inject(AppConfigService);
   private readonly authService = inject(AuthService);
   private readonly checkoutService = inject(CheckoutService);
   private readonly teamService = inject(TeamService);

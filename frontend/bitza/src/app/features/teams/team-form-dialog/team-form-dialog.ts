@@ -4,7 +4,6 @@ import { MatButtonModule } from '@angular/material/button';
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
-import { AppConfigService } from '../../../core/services/app-config.service';
 import { Team } from '../../../core/models';
 
 export interface TeamFormDialogData {
@@ -26,9 +25,7 @@ interface TeamFormModel {
   selector: 'app-team-form-dialog',
   imports: [FormField, MatButtonModule, MatDialogModule, MatFormFieldModule, MatInputModule],
   template: `
-    <h2 mat-dialog-title>
-      {{ isEdit ? 'Edit' : 'New' }} {{ config.teamLabelSingular().toLowerCase() }}
-    </h2>
+    <h2 mat-dialog-title>{{ isEdit ? 'Edit' : 'New' }} project</h2>
 
     <form (submit)="onSubmit($event)" novalidate>
       <mat-dialog-content>
@@ -61,7 +58,6 @@ interface TeamFormModel {
   `,
 })
 export class TeamFormDialog {
-  protected readonly config = inject(AppConfigService);
   protected readonly dialogRef = inject(MatDialogRef<TeamFormDialog, TeamFormResult>);
   private readonly data = inject<TeamFormDialogData>(MAT_DIALOG_DATA, { optional: true });
 

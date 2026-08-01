@@ -1,6 +1,7 @@
 /**
- * `Team` doubles as "Project" in the frontend's own display labelling only
- * (see AppConfigService) — nothing in the API encodes that distinction.
+ * `Team` is always displayed as "Project" in the frontend — a permanent
+ * display-label decision (see bitza_project_context.md's "Team vs Project
+ * label" section), not encoded anywhere in the API.
  */
 export interface Team {
   id: string;

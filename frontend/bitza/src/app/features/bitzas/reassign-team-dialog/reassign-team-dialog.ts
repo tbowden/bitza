@@ -6,7 +6,6 @@ import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/materia
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatSelectModule } from '@angular/material/select';
 import { catchError, of } from 'rxjs';
-import { AppConfigService } from '../../../core/services/app-config.service';
 import { TeamService } from '../../../core/services/team.service';
 import { BitzaKind, CascadeScope, TeamListItem } from '../../../core/models';
 
@@ -40,19 +39,19 @@ function defaultCascadeScope(kind: BitzaKind): CascadeScope {
   selector: 'app-reassign-team-dialog',
   imports: [FormField, MatButtonModule, MatDialogModule, MatFormFieldModule, MatSelectModule],
   template: `
-    <h2 mat-dialog-title>Reassign {{ config.teamLabelSingular().toLowerCase() }}</h2>
+    <h2 mat-dialog-title>Reassign project</h2>
 
     <form (submit)="onSubmit($event)" novalidate>
       <mat-dialog-content>
         <mat-form-field appearance="outline" class="full-width">
-          <mat-label>New {{ config.teamLabelSingular().toLowerCase() }}</mat-label>
+          <mat-label>New project</mat-label>
           <mat-select [formField]="reassignForm.team_id">
             @for (team of teams(); track team.id) {
               <mat-option [value]="team.id">{{ team.name }}</mat-option>
             }
           </mat-select>
           @if (reassignForm.team_id().touched() && reassignForm.team_id().invalid()) {
-            <mat-error>Choose a {{ config.teamLabelSingular().toLowerCase() }}.</mat-error>
+            <mat-error>Choose a project.</mat-error>
           }
         </mat-form-field>
 
@@ -84,7 +83,6 @@ function defaultCascadeScope(kind: BitzaKind): CascadeScope {
   `,
 })
 export class ReassignTeamDialog {
-  protected readonly config = inject(AppConfigService);
   protected readonly dialogRef = inject(MatDialogRef<ReassignTeamDialog, ReassignTeamResult>);
   private readonly data = inject<ReassignTeamDialogData>(MAT_DIALOG_DATA);
   private readonly teamService = inject(TeamService);
@@ -100,7 +98,7 @@ export class ReassignTeamDialog {
   });
 
   protected readonly reassignForm = form(this.model, (path) => {
-    required(path.team_id, { message: 'Team is required' });
+    required(path.team_id, { message: 'Project is required' });
     required(path.cascade_scope, { message: 'Scope is required' });
   });
 

@@ -8,7 +8,6 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { catchError, of, switchMap } from 'rxjs';
-import { AppConfigService } from '../../../core/services/app-config.service';
 import { AuthService } from '../../../core/services/auth.service';
 import { TeamService } from '../../../core/services/team.service';
 import { TeamListItem } from '../../../core/models';
@@ -25,27 +24,25 @@ import { TeamFormDialog, TeamFormResult } from '../team-form-dialog/team-form-di
   ],
   template: `
     <div class="page-header">
-      <h1>{{ config.teamLabelPlural() }}</h1>
+      <h1>Projects</h1>
       <button mat-flat-button color="primary" type="button" (click)="onCreate()">
         <mat-icon>add</mat-icon>
-        New {{ config.teamLabelSingular().toLowerCase() }}
+        New project
       </button>
     </div>
 
     <mat-slide-toggle [checked]="onlyMine()" (change)="onlyMine.set($event.checked)">
-      Only {{ config.teamLabelPlural().toLowerCase() }} I'm on
+      Only projects I'm on
     </mat-slide-toggle>
 
     @if (loadError()) {
-      <p class="error-text" role="alert">
-        Couldn't load {{ config.teamLabelPlural().toLowerCase() }}. Try refreshing.
-      </p>
+      <p class="error-text" role="alert">Couldn't load projects. Try refreshing.</p>
     } @else if (teamsLoading()) {
       <div class="loading-row">
         <mat-progress-spinner diameter="28" mode="indeterminate"></mat-progress-spinner>
       </div>
     } @else if (visibleTeams().length === 0) {
-      <p>No {{ config.teamLabelPlural().toLowerCase() }} to show yet.</p>
+      <p>No projects to show yet.</p>
     } @else {
       <div class="team-grid">
         @for (team of visibleTeams(); track team.id) {
@@ -65,7 +62,9 @@ import { TeamFormDialog, TeamFormResult } from '../team-form-dialog/team-form-di
             </mat-card-header>
             @if (team.member_count > 0) {
               <mat-card-content
-                >{{ team.member_count }} member{{ team.member_count === 1 ? '' : 's' }}</mat-card-content
+                >{{ team.member_count }} member{{
+                  team.member_count === 1 ? '' : 's'
+                }}</mat-card-content
               >
             }
           </mat-card>
@@ -109,7 +108,6 @@ import { TeamFormDialog, TeamFormResult } from '../team-form-dialog/team-form-di
   `,
 })
 export class TeamsList {
-  protected readonly config = inject(AppConfigService);
   private readonly authService = inject(AuthService);
   private readonly teamService = inject(TeamService);
   private readonly dialog = inject(MatDialog);
