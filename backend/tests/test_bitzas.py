@@ -271,6 +271,33 @@ class TestHierarchy:
         resp = client.delete(f"{BASE}/{parent['id']}", headers=auth(admin_token))
         assert resp.status_code == 409
 
+    def test_cannot_create_under_stock_parent(
+        self, client: TestClient, user_token: str, default_team: Team
+    ) -> None:
+        """Stock bitzas are quantity-only leaves — nothing can be created underneath one."""
+        stock = make_exact_stock(client, user_token, default_team.id, qty=10)
+        resp = client.post(
+            BASE + "/",
+            json={
+                "name": "Should Not Fit",
+                "kind": "fixed",
+                "responsible_team_id": default_team.id,
+                "parent_id": stock["id"],
+            },
+            headers=auth(user_token),
+        )
+        assert resp.status_code == 409
+
+    def test_cannot_move_bitza_under_stock_parent(
+        self, client: TestClient, user_token: str, default_team: Team
+    ) -> None:
+        stock = make_exact_stock(client, user_token, default_team.id, qty=10)
+        shelf = make_fixed(client, user_token, default_team.id, name="Loose Shelf")
+        resp = client.patch(
+            f"{BASE}/{shelf['id']}", json={"parent_id": stock["id"]}, headers=auth(user_token)
+        )
+        assert resp.status_code == 409
+
 
 class TestAncestors:
     """GET /{bitza_id}/ancestors — exposes BitzaRepository.get_ancestors()
@@ -374,25 +401,86 @@ class TestRootBitza:
         )
         assert resp.status_code == 409
 
-    def test_root_parent_id_is_immutable(
+    def test_root_parent_id_change_rejected_for_non_admin(
         self, client: TestClient, user_token: str, root_bitza: Bitza, default_team: Team
     ) -> None:
-        """The root can never be reparented — it's the tree's permanent anchor."""
+        """
+        A non-admin touching the root at all is rejected on the role
+        check before the field-level guard even runs — 403, not the 409
+        an admin gets for the identical payload (see the admin case
+        below) — role wins when both problems are present at once.
+        """
         somewhere = make_fixed(client, user_token, default_team.id, name="Somewhere")
         resp = client.patch(
             f"{BASE}/{root_bitza.id}", json={"parent_id": somewhere["id"]}, headers=auth(user_token)
         )
+        assert resp.status_code == 403
+
+    def test_root_parent_id_change_rejected_for_admin(
+        self,
+        client: TestClient,
+        admin_token: str,
+        user_token: str,
+        root_bitza: Bitza,
+        default_team: Team,
+    ) -> None:
+        """The root can never be reparented — it's the tree's permanent
+        anchor — even for an admin, who clears the role check but is
+        still rejected for the field itself."""
+        somewhere = make_fixed(client, user_token, default_team.id, name="Somewhere")
+        resp = client.patch(
+            f"{BASE}/{root_bitza.id}", json={"parent_id": somewhere["id"]}, headers=auth(admin_token)
+        )
         assert resp.status_code == 409
 
-    def test_root_name_and_team_remain_editable(
-        self, client: TestClient, user_token: str, root_bitza: Bitza
+    def test_root_name_editable_by_admin(
+        self, client: TestClient, admin_token: str, root_bitza: Bitza
     ) -> None:
-        """Only structural fields (parent_id) are protected — cosmetic edits are fine."""
+        """Name is the one field the root's PATCH lockdown still allows — for an admin."""
         resp = client.patch(
-            f"{BASE}/{root_bitza.id}", json={"name": "Renamed Root"}, headers=auth(user_token)
+            f"{BASE}/{root_bitza.id}", json={"name": "Renamed Root"}, headers=auth(admin_token)
         )
         assert resp.status_code == 200
         assert resp.json()["name"] == "Renamed Root"
+
+    def test_root_name_edit_rejected_for_non_admin(
+        self, client: TestClient, user_token: str, root_bitza: Bitza
+    ) -> None:
+        """Even the one field that's ever editable on the root is admin/superuser-only."""
+        resp = client.patch(
+            f"{BASE}/{root_bitza.id}", json={"name": "Renamed Root"}, headers=auth(user_token)
+        )
+        assert resp.status_code == 403
+
+    def test_root_non_name_field_rejected_for_admin(
+        self, client: TestClient, admin_token: str, root_bitza: Bitza
+    ) -> None:
+        """Any field other than name is rejected outright, even for an
+        admin who's cleared the role check — the whole request is
+        rejected, not partially applied."""
+        resp = client.patch(
+            f"{BASE}/{root_bitza.id}",
+            json={"description": "New description"},
+            headers=auth(admin_token),
+        )
+        assert resp.status_code == 409
+
+    def test_root_reassign_team_rejected(
+        self, client: TestClient, admin_token: str, root_bitza: Bitza, default_team: Team
+    ) -> None:
+        """
+        reassign-team changes responsible_team_id directly and doesn't
+        route through update_bitza's guard at all — checked separately
+        so this endpoint can't undo the PATCH lockdown above. Unconditional,
+        like delete/retire/move, since the root's team is never
+        legitimately editable — not even for an admin.
+        """
+        resp = client.post(
+            f"{BASE}/{root_bitza.id}/reassign-team",
+            json={"team_id": default_team.id, "cascade_scope": "none"},
+            headers=auth(admin_token),
+        )
+        assert resp.status_code == 409
 
 
 # =========================================================================
@@ -812,6 +900,19 @@ class TestKindEditability:
         shelf = make_fixed(client, user_token, default_team.id)
         resp = client.patch(f"{BASE}/{shelf['id']}", json={"kind": "stock"}, headers=auth(user_token))
         assert resp.status_code == 422
+
+    def test_fixed_to_stock_blocked_with_children(
+        self, client: TestClient, user_token: str, default_team: Team
+    ) -> None:
+        parent = make_fixed(client, user_token, default_team.id, name="Non-empty Shelf")
+        make_mobile(client, user_token, default_team.id, name="Inside", parent_id=parent["id"])
+
+        resp = client.patch(
+            f"{BASE}/{parent['id']}",
+            json={"kind": "stock", "stock_mode": "exact", "quantity": 0},
+            headers=auth(user_token),
+        )
+        assert resp.status_code == 409
 
     def test_fixed_to_stock_exact_allowed(
         self, client: TestClient, user_token: str, default_team: Team

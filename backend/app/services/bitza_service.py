@@ -205,13 +205,65 @@ class BitzaService:
         config = self._system_config.get()
         return config.root_bitza_id if config else None
 
+    def _reject_if_parent_is_stock(self, parent: Bitza) -> None:
+        """
+        Stock bitzas (resistors, screws, zip ties — quantity-only leaves)
+        can never be a parent. Shared by create_bitza's parent_id check
+        and update_bitza's parent_id-change branch so the message/status
+        stays identical from both call sites.
+        """
+        if parent.kind == BitzaKind.stock:
+            raise ConflictError(
+                f"Cannot add or move a bitza under '{parent.name}' — stock "
+                "bitzas can't have children"
+            )
+
+    def _guard_root_bitza_update(self, data: BitzaUpdate, actor: User) -> None:
+        """
+        The root bitza is the tree's permanent structural anchor: an
+        ordinary PATCH may only ever change `name`, and only an
+        admin/superuser may do even that (mirrors the role check already
+        in delete_bitza). Everything else about the root — kind, parent,
+        responsible team, stock fields, and so on — is fixed for the
+        life of the deployment once create_root_bitza runs.
+
+        Rejects the whole request rather than silently dropping the
+        disallowed fields, so a caller never gets a 200 that quietly did
+        less than what was asked. Iterates BitzaUpdate's fields
+        dynamically (rather than naming them) so a field added to the
+        schema later is locked down here by default too, instead of
+        silently slipping through until someone remembers to update a
+        list.
+
+        If both problems are present at once — a non-admin caller *and*
+        non-name fields set — the role check wins: a 403 is the more
+        useful answer to "can I do this at all" than a 409 about which
+        fields happen to be editable.
+        """
+        if actor.role not in (UserRole.admin, UserRole.superuser):
+            raise PermissionDeniedError("Only admins or the superuser may edit the root bitza.")
+
+        disallowed = [
+            field_name
+            for field_name in BitzaUpdate.model_fields
+            if field_name != "name" and getattr(data, field_name) is not None
+        ]
+        if disallowed:
+            raise RootBitzaProtectedError(
+                "The root bitza's name is the only field that can be changed — "
+                f"{', '.join(disallowed)} cannot be set on the root."
+            )
+
     # ------------------------------------------------------------------
     # Create / read / update / delete
     # ------------------------------------------------------------------
 
     def create_bitza(self, data: BitzaCreate, actor: User) -> BitzaRead:
-        if data.parent_id and not self._bitzas.get(data.parent_id):
-            raise _not_found("Parent bitza not found")
+        if data.parent_id:
+            parent = self._bitzas.get(data.parent_id)
+            if not parent:
+                raise _not_found("Parent bitza not found")
+            self._reject_if_parent_is_stock(parent)
         if not self._teams.get(data.responsible_team_id):
             raise _not_found("Responsible team not found")
         if data.category_id and not self._categories.get(data.category_id):
@@ -299,14 +351,19 @@ class BitzaService:
         if not bitza:
             raise _not_found("Bitza not found")
 
+        if bitza_id == self._get_root_bitza_id():
+            # Unconditional gate, checked before any field is applied —
+            # see _guard_root_bitza_update. Once this passes, data.name
+            # is the only field that can be non-None, so the ordinary
+            # parent_id-move branch just below is a no-op for the root
+            # from here on (there's nothing left to move).
+            self._guard_root_bitza_update(data, actor)
+
         if data.parent_id is not None and data.parent_id != bitza.parent_id:
-            if bitza_id == self._get_root_bitza_id():
-                raise RootBitzaProtectedError(
-                    "The root bitza is the tree's permanent anchor and can never be moved."
-                )
             new_parent = self._bitzas.get(data.parent_id)
             if not new_parent:
                 raise _not_found("New parent bitza not found")
+            self._reject_if_parent_is_stock(new_parent)
             if self._would_create_cycle(bitza_id, data.parent_id):
                 raise ConflictError(
                     "Cannot move a bitza underneath its own descendant"
@@ -376,6 +433,13 @@ class BitzaService:
                     raise ConflictError(
                         "Can't change stock tracking away from 'exact' — this "
                         "bitza has a stock adjustment history"
+                    )
+
+            if new_kind == BitzaKind.stock and old_kind != BitzaKind.stock:
+                if self._bitzas.count_children(bitza.id) > 0:
+                    raise ConflictError(
+                        "Can't change type to 'stock' — this bitza already has "
+                        "children, and stock bitzas can't have children"
                     )
 
             if new_kind != BitzaKind.stock:
@@ -507,6 +571,16 @@ class BitzaService:
         bitza = self._bitzas.get(bitza_id)
         if not bitza:
             raise _not_found("Bitza not found")
+        if bitza_id == self._get_root_bitza_id():
+            # This endpoint changes responsible_team_id directly and
+            # never routed through update_bitza's guard — unconditional,
+            # matching delete/retire/move rather than the admin-only
+            # name exception, since there's no field here that's ever
+            # legitimately editable on the root.
+            raise RootBitzaProtectedError(
+                "The root bitza's responsible team can never be changed — "
+                "its name is the only editable field."
+            )
         team = self._teams.get(data.team_id)
         if not team:
             raise _not_found("Team not found")
