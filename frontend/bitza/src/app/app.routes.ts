@@ -14,7 +14,7 @@ export const routes: Routes = [
     loadComponent: () => import('./shell/app-shell').then((m) => m.AppShell),
     canActivate: [authGuard],
     children: [
-      { path: '', redirectTo: 'bitzas', pathMatch: 'full' },
+      { path: '', redirectTo: 'me', pathMatch: 'full' },
       {
         path: 'bitzas',
         canActivate: [redirectToRootGuard],
