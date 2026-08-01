@@ -103,119 +103,137 @@ const STOCK_MODE_LABELS: Record<StockMode, string> = {
           }
         </mat-form-field>
 
-        @if (isEdit && kindLocked()) {
-          <p class="kind-readonly">
-            Type: <strong>{{ kindLabel(data?.bitza?.kind) }}</strong> (locked — {{ lockReason() }})
+        @if (isRootBitza) {
+          <p class="root-readonly-note">
+            This is the tree's root bitza — its name is the only field that can be changed.
           </p>
         } @else {
-          <mat-form-field appearance="outline" class="full-width">
-            <mat-label>Type</mat-label>
-            <mat-select [formField]="bitzaForm.kind">
-              @for (option of kindOptions; track option.value) {
-                <mat-option [value]="option.value">{{ option.label }}</mat-option>
-              }
-            </mat-select>
-          </mat-form-field>
-          @if (isEdit && bitzaForm.kind().value() !== data?.bitza?.kind) {
-            <p class="kind-hint">
-              Changing type can affect checkout or stock-tracking history views.
-            </p>
-          }
-        }
-
-        <mat-form-field appearance="outline" class="full-width">
-          <mat-label>{{ config.teamLabelSingular() }} responsible</mat-label>
-          <mat-select [formField]="bitzaForm.responsible_team_id">
-            @for (team of teams(); track team.id) {
-              <mat-option [value]="team.id">{{ team.name }}</mat-option>
-            }
-          </mat-select>
-          @if (
-            bitzaForm.responsible_team_id().touched() && bitzaForm.responsible_team_id().invalid()
-          ) {
-            <mat-error>{{ config.teamLabelSingular() }} is required.</mat-error>
-          }
-        </mat-form-field>
-
-        <mat-form-field appearance="outline" class="full-width">
-          <mat-label>Category</mat-label>
-          <mat-select [formField]="bitzaForm.category_id">
-            <mat-option value="">No category</mat-option>
-            @for (category of categories(); track category.id) {
-              <mat-option [value]="category.id">{{ category.name }}</mat-option>
-            }
-          </mat-select>
-        </mat-form-field>
-
-        @if (bitzaForm.kind().value() === 'stock') {
-          @if (isEdit && stockModeLocked()) {
-            <p class="stock-mode-readonly">
-              Stock tracking: <strong>{{ stockModeLabel() }}</strong> (locked — {{ lockReason() }})
+          @if (isEdit && kindLocked()) {
+            <p class="kind-readonly">
+              Type: <strong>{{ kindLabel(data?.bitza?.kind) }}</strong> (locked —
+              {{ lockReason() }})
             </p>
           } @else {
             <mat-form-field appearance="outline" class="full-width">
-              <mat-label>Stock tracking</mat-label>
-              <mat-select [formField]="bitzaForm.stock_mode">
-                <mat-option value="exact">Exact quantity</mat-option>
-                <mat-option value="fuzzy">Fuzzy (plentiful / low / empty)</mat-option>
+              <mat-label>Type</mat-label>
+              <mat-select [formField]="bitzaForm.kind">
+                @for (option of kindOptions; track option.value) {
+                  <mat-option
+                    [value]="option.value"
+                    [disabled]="option.value === 'stock' && hasChildren"
+                  >
+                    {{ option.label }}
+                  </mat-option>
+                }
               </mat-select>
-              @if (bitzaForm.stock_mode().touched() && bitzaForm.stock_mode().invalid()) {
-                <mat-error>Choose how this stock is tracked.</mat-error>
-              }
             </mat-form-field>
+            @if (hasChildren) {
+              <p class="kind-hint">
+                Can't change to Stock — this bitza has children, and stock bitzas can't have any.
+              </p>
+            }
+            @if (isEdit && bitzaForm.kind().value() !== data?.bitza?.kind) {
+              <p class="kind-hint">
+                Changing type can affect checkout or stock-tracking history views.
+              </p>
+            }
           }
 
-          @if (bitzaForm.stock_mode().value() === 'fuzzy') {
-            <mat-form-field appearance="outline" class="full-width">
-              <mat-label>Starting fuzzy state</mat-label>
-              <mat-select [formField]="bitzaForm.fuzzy_state">
-                <mat-option value="plentiful">Plentiful</mat-option>
-                <mat-option value="low">Low</mat-option>
-                <mat-option value="empty">Empty</mat-option>
-              </mat-select>
-              @if (bitzaForm.fuzzy_state().touched() && bitzaForm.fuzzy_state().invalid()) {
-                <mat-error>Starting state is required.</mat-error>
+          <mat-form-field appearance="outline" class="full-width">
+            <mat-label>{{ config.teamLabelSingular() }} responsible</mat-label>
+            <mat-select [formField]="bitzaForm.responsible_team_id">
+              @for (team of teams(); track team.id) {
+                <mat-option [value]="team.id">{{ team.name }}</mat-option>
               }
-            </mat-form-field>
+            </mat-select>
+            @if (
+              bitzaForm.responsible_team_id().touched() && bitzaForm.responsible_team_id().invalid()
+            ) {
+              <mat-error>{{ config.teamLabelSingular() }} is required.</mat-error>
+            }
+          </mat-form-field>
+
+          <mat-form-field appearance="outline" class="full-width">
+            <mat-label>Category</mat-label>
+            <mat-select [formField]="bitzaForm.category_id">
+              <mat-option value="">No category</mat-option>
+              @for (category of categories(); track category.id) {
+                <mat-option [value]="category.id">{{ category.name }}</mat-option>
+              }
+            </mat-select>
+          </mat-form-field>
+
+          @if (bitzaForm.kind().value() === 'stock') {
+            @if (isEdit && stockModeLocked()) {
+              <p class="stock-mode-readonly">
+                Stock tracking: <strong>{{ stockModeLabel() }}</strong> (locked —
+                {{ lockReason() }})
+              </p>
+            } @else {
+              <mat-form-field appearance="outline" class="full-width">
+                <mat-label>Stock tracking</mat-label>
+                <mat-select [formField]="bitzaForm.stock_mode">
+                  <mat-option value="exact">Exact quantity</mat-option>
+                  <mat-option value="fuzzy">Fuzzy (plentiful / low / empty)</mat-option>
+                </mat-select>
+                @if (bitzaForm.stock_mode().touched() && bitzaForm.stock_mode().invalid()) {
+                  <mat-error>Choose how this stock is tracked.</mat-error>
+                }
+              </mat-form-field>
+            }
+
+            @if (bitzaForm.stock_mode().value() === 'fuzzy') {
+              <mat-form-field appearance="outline" class="full-width">
+                <mat-label>Starting fuzzy state</mat-label>
+                <mat-select [formField]="bitzaForm.fuzzy_state">
+                  <mat-option value="plentiful">Plentiful</mat-option>
+                  <mat-option value="low">Low</mat-option>
+                  <mat-option value="empty">Empty</mat-option>
+                </mat-select>
+                @if (bitzaForm.fuzzy_state().touched() && bitzaForm.fuzzy_state().invalid()) {
+                  <mat-error>Starting state is required.</mat-error>
+                }
+              </mat-form-field>
+            }
+
+            @if (showStartingQuantity()) {
+              <mat-form-field appearance="outline" class="full-width">
+                <mat-label>Starting quantity</mat-label>
+                <input matInput type="number" [formField]="bitzaForm.quantity" />
+                @if (bitzaForm.quantity().touched() && bitzaForm.quantity().invalid()) {
+                  <mat-error>Enter a starting quantity of 0 or more.</mat-error>
+                }
+              </mat-form-field>
+            }
           }
 
-          @if (showStartingQuantity()) {
-            <mat-form-field appearance="outline" class="full-width">
-              <mat-label>Starting quantity</mat-label>
-              <input matInput type="number" [formField]="bitzaForm.quantity" />
-              @if (bitzaForm.quantity().touched() && bitzaForm.quantity().invalid()) {
-                <mat-error>Enter a starting quantity of 0 or more.</mat-error>
-              }
-            </mat-form-field>
+          <mat-form-field appearance="outline" class="full-width">
+            <mat-label>Description</mat-label>
+            <textarea matInput rows="2" [formField]="bitzaForm.description"></textarea>
+          </mat-form-field>
+
+          @if (isEdit) {
+            <mat-expansion-panel class="acquisition-panel">
+              <mat-expansion-panel-header>Acquisition details</mat-expansion-panel-header>
+              <mat-form-field appearance="outline" class="full-width">
+                <mat-label>Vendor</mat-label>
+                <input matInput type="text" [formField]="bitzaForm.vendor" />
+              </mat-form-field>
+              <mat-form-field appearance="outline" class="full-width">
+                <mat-label>Purchase date</mat-label>
+                <input
+                  matInput
+                  type="text"
+                  placeholder="e.g. 2026-03-14"
+                  [formField]="bitzaForm.purchase_date"
+                />
+              </mat-form-field>
+              <mat-form-field appearance="outline" class="full-width">
+                <mat-label>Order URL</mat-label>
+                <input matInput type="text" [formField]="bitzaForm.order_url" />
+              </mat-form-field>
+            </mat-expansion-panel>
           }
-        }
-
-        <mat-form-field appearance="outline" class="full-width">
-          <mat-label>Description</mat-label>
-          <textarea matInput rows="2" [formField]="bitzaForm.description"></textarea>
-        </mat-form-field>
-
-        @if (isEdit) {
-          <mat-expansion-panel class="acquisition-panel">
-            <mat-expansion-panel-header>Acquisition details</mat-expansion-panel-header>
-            <mat-form-field appearance="outline" class="full-width">
-              <mat-label>Vendor</mat-label>
-              <input matInput type="text" [formField]="bitzaForm.vendor" />
-            </mat-form-field>
-            <mat-form-field appearance="outline" class="full-width">
-              <mat-label>Purchase date</mat-label>
-              <input
-                matInput
-                type="text"
-                placeholder="e.g. 2026-03-14"
-                [formField]="bitzaForm.purchase_date"
-              />
-            </mat-form-field>
-            <mat-form-field appearance="outline" class="full-width">
-              <mat-label>Order URL</mat-label>
-              <input matInput type="text" [formField]="bitzaForm.order_url" />
-            </mat-form-field>
-          </mat-expansion-panel>
         }
       </mat-dialog-content>
 
@@ -234,6 +252,11 @@ const STOCK_MODE_LABELS: Record<StockMode, string> = {
     }
 
     .kind-readonly {
+      color: var(--mat-sys-on-surface-variant);
+      margin: 0 0 1rem;
+    }
+
+    .root-readonly-note {
       color: var(--mat-sys-on-surface-variant);
       margin: 0 0 1rem;
     }
@@ -266,6 +289,20 @@ export class BitzaFormDialog {
 
   protected readonly kindOptions = KIND_OPTIONS;
   protected readonly isEdit = !!this.data?.bitza;
+  /**
+   * Mirrors BitzaService._guard_root_bitza_update on the backend — the
+   * form shows Name and nothing else for the root, rather than a
+   * field-by-field locked/readonly treatment, since literally every
+   * other field is off-limits there at once.
+   */
+  protected readonly isRootBitza = !!this.data?.bitza?.is_root;
+  /**
+   * Mirrors the update_bitza kind-transition guard that rejects moving
+   * to 'stock' while children exist — disables that option up front
+   * rather than letting the change get all the way to a 409 on submit,
+   * same as the existing kindLocked/stockModeLocked checks below.
+   */
+  protected readonly hasChildren = this.isEdit && (this.data?.bitza?.child_count ?? 0) > 0;
 
   protected kindLabel(kind: BitzaKind | undefined): string {
     return kind ? (KIND_OPTIONS.find((o) => o.value === kind)?.label ?? kind) : '';
@@ -438,6 +475,17 @@ export class BitzaFormDialog {
       const value = this.model();
 
       if (this.isEdit) {
+        if (this.isRootBitza) {
+          // Every other field is hidden above, but the model still
+          // carries their prefilled defaults (e.g. the existing
+          // responsible_team_id) — sending those as unchanged values
+          // would still trip the "only name" guard on the backend, so
+          // this is built by hand rather than reusing the general
+          // update object below.
+          this.dialogRef.close({ mode: 'edit', value: { name: value.name } });
+          return undefined;
+        }
+
         const update: BitzaUpdate = {
           name: value.name,
           responsible_team_id: value.responsible_team_id,

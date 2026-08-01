@@ -7,7 +7,7 @@ import { MatListModule } from '@angular/material/list';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { catchError, of, switchMap } from 'rxjs';
 import { BitzaService } from '../../../core/services/bitza.service';
-import { Bitza, BitzaListItem } from '../../../core/models';
+import { Bitza, BitzaKind, BitzaListItem } from '../../../core/models';
 
 export interface MoveBitzaDialogData {
   bitza: Bitza;
@@ -20,6 +20,7 @@ export interface MoveBitzaResult {
 interface Crumb {
   id: string;
   name: string;
+  kind: BitzaKind;
 }
 
 @Component({
@@ -49,12 +50,15 @@ interface Crumb {
         color="primary"
         type="button"
         class="move-here-button"
-        [disabled]="currentLocationId() === data.bitza.id"
+        [disabled]="currentLocationId() === data.bitza.id || currentLocationIsStock()"
         (click)="onMoveHere()"
       >
         <mat-icon>drive_file_move</mat-icon>
         Move here — into "{{ currentLocationName() }}"
       </button>
+      @if (currentLocationIsStock()) {
+        <p class="stock-hint">Can't move it here — stock items can't contain other bitzas.</p>
+      }
 
       @if (loading()) {
         <div class="loading-row">
@@ -110,6 +114,12 @@ interface Crumb {
       margin-bottom: 1rem;
     }
 
+    .stock-hint {
+      color: var(--mat-sys-on-surface-variant);
+      font-size: 0.8125rem;
+      margin: -0.5rem 0 1rem;
+    }
+
     .disabled-item {
       opacity: 0.5;
       pointer-events: none;
@@ -140,6 +150,14 @@ export class MoveBitzaDialog {
     return stack.length > 0 ? stack[stack.length - 1].name : '…';
   });
 
+  /** Mirrors update_bitza's _reject_if_parent_is_stock guard — a stock
+   * bitza can never be a parent, so "Move here" is disabled the moment
+   * browsing lands on one, rather than letting it reach a 409. */
+  protected readonly currentLocationIsStock = computed(() => {
+    const stack = this.pathStack();
+    return stack.length > 0 && stack[stack.length - 1].kind === 'stock';
+  });
+
   private readonly currentLocationId$ = toObservable(this.currentLocationId);
 
   private readonly childrenResult = toSignal(
@@ -166,13 +184,16 @@ export class MoveBitzaDialog {
       .pipe(catchError(() => of<BitzaListItem[]>([])))
       .subscribe((roots) => {
         if (roots.length > 0) {
-          this.pathStack.set([{ id: roots[0].id, name: roots[0].name }]);
+          this.pathStack.set([{ id: roots[0].id, name: roots[0].name, kind: roots[0].kind }]);
         }
       });
   }
 
   protected drillInto(child: BitzaListItem): void {
-    this.pathStack.update((stack) => [...stack, { id: child.id, name: child.name }]);
+    this.pathStack.update((stack) => [
+      ...stack,
+      { id: child.id, name: child.name, kind: child.kind },
+    ]);
   }
 
   protected jumpTo(index: number): void {
@@ -181,7 +202,7 @@ export class MoveBitzaDialog {
 
   protected onMoveHere(): void {
     const newParentId = this.currentLocationId();
-    if (!newParentId || newParentId === this.data.bitza.id) {
+    if (!newParentId || newParentId === this.data.bitza.id || this.currentLocationIsStock()) {
       return;
     }
     this.dialogRef.close({ newParentId });

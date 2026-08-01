@@ -149,23 +149,27 @@ import { ImageGallery } from '../image-gallery/image-gallery';
           </mat-card-content>
 
           <mat-card-actions>
-            <button mat-button type="button" (click)="onCreateChild(bitza)">
-              <mat-icon>add</mat-icon>
-              Add here
-            </button>
-            <button mat-button type="button" (click)="onEdit(bitza)">
-              <mat-icon>edit</mat-icon>
-              Edit
-            </button>
+            @if (bitza.kind !== 'stock') {
+              <button mat-button type="button" (click)="onCreateChild(bitza)">
+                <mat-icon>add</mat-icon>
+                Add here
+              </button>
+            }
+            @if (!bitza.is_root || authService.isAdmin()) {
+              <button mat-button type="button" (click)="onEdit(bitza)">
+                <mat-icon>edit</mat-icon>
+                Edit
+              </button>
+            }
             <button mat-button type="button" (click)="onViewLabel(bitza)">
               <mat-icon>qr_code_2</mat-icon>
               Label
             </button>
-            <button mat-button type="button" (click)="onReassignTeam(bitza)">
-              <mat-icon>swap_horiz</mat-icon>
-              Reassign {{ config.teamLabelSingular().toLowerCase() }}
-            </button>
             @if (!bitza.is_root) {
+              <button mat-button type="button" (click)="onReassignTeam(bitza)">
+                <mat-icon>swap_horiz</mat-icon>
+                Reassign {{ config.teamLabelSingular().toLowerCase() }}
+              </button>
               <button mat-button type="button" (click)="onMove(bitza)">
                 <mat-icon>drive_file_move</mat-icon>
                 Move
@@ -488,9 +492,18 @@ export class BitzaBrowser {
       if (!result || result.mode !== 'edit') {
         return;
       }
-      this.bitzaService
-        .update(bitza.id, result.value)
-        .subscribe(() => this.reload.update((n) => n + 1));
+      this.bitzaService.update(bitza.id, result.value).subscribe({
+        next: () => this.reload.update((n) => n + 1),
+        error: (err: HttpErrorResponse) => {
+          const message =
+            err.status === 403
+              ? "You don't have permission to make that change."
+              : err.status === 409
+                ? "Can't save that change — check it doesn't conflict with this bitza's children or history."
+                : 'Something went wrong saving this bitza.';
+          this.snackBar.open(message, 'Dismiss', { duration: 6000 });
+        },
+      });
     });
   }
 
@@ -506,7 +519,7 @@ export class BitzaBrowser {
         error: (err: HttpErrorResponse) => {
           const message =
             err.status === 409
-              ? "Can't move it there — that would nest it inside itself."
+              ? "Can't move it there — it can't go inside a stock item, or inside itself."
               : 'Something went wrong moving this bitza.';
           this.snackBar.open(message, 'Dismiss', { duration: 6000 });
         },
