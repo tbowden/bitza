@@ -861,8 +861,8 @@ class TestStockAdjustments:
 
 
 # =========================================================================
-# Kind editability (conditional — see bitza_schema_reconciliation_todo.md
-# section B). kind/stock_mode transitions are guarded by history, not by
+# Kind editability (conditional — see bitza_project_context.md's `kind`
+# section). kind/stock_mode transitions are guarded by history, not by
 # permission level — any authenticated user who can PATCH a bitza at all
 # can attempt one; the guard is what protects the data.
 # =========================================================================

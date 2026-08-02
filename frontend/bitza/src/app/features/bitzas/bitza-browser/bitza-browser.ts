@@ -441,7 +441,8 @@ export class BitzaBrowser {
    * ancestors endpoint never includes it, so no slicing needed here).
    * Previously rebuilt via N sequential GET /bitzas/{id} calls walking
    * parent_id one hop at a time (RxJS `expand`); now one call to
-   * GET /bitzas/{id}/ancestors. See bitza_schema_reconciliation_todo.md.
+   * GET /bitzas/{id}/ancestors. See bitza_project_context.md's Hierarchy
+   * section.
    */
   protected readonly breadcrumb = computed(() => this.pageData()?.breadcrumb ?? []);
 

@@ -401,11 +401,11 @@ export class BitzaFormDialog {
   });
 
   /**
-   * Read-only label for edit mode — see the stock_mode-inert-during-edit
-   * fix (bitza_schema_reconciliation_todo.md). Always sourced from the
-   * bitza's actual persisted stock_mode, never the (now hidden) form
-   * control, since that control could otherwise be flipped without the
-   * change ever reaching the backend.
+   * Read-only label for edit mode — guards against a bug where this was
+   * previously read from the (now hidden) form control instead of the
+   * bitza's actual persisted stock_mode, so the control could be flipped
+   * silently without the change ever reaching the backend. Always
+   * sourced from the persisted value instead.
    */
   protected readonly stockModeLabel = computed(() => {
     const mode = this.data?.bitza?.stock_mode;
