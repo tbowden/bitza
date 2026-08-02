@@ -1,187 +1,78 @@
-# Bitza — open issues (post-reconciliation)
+# Bitza — open issues
 
-**Status: not started.** Raised after `bitza_schema_reconciliation_todo.md` was
-fully completed — 16 patches plus both design questions it raised (`/me`
-landing page, `kind` editability/labelling) are built, tested, applied, and
-pushed to `main`. Read `bitza_context_restoration.md` first if you haven't —
-it explains the overall project stage and links everything else.
-
-Three of these are straightforward backend+frontend fixes (#1–#3). The
-fourth (#4) is a **decided** naming question — nothing left to weigh, just
-implementation.
+**Status: Stage 5 is complete.** All four items below were fixed, tested,
+applied, and pushed across four reviewed patches. This document now
+tracks **Stage 6**, the next planned work. For full project orientation
+start at `bitza_context_restoration.md`; for the backend architecture
+these items touch, see `bitza_project_context.md`.
 
 ---
 
-## 1. Login should land on `/me`, not `/bitzas`
+## Stage 5 (complete) — post-reconciliation fixes
 
-**Current behaviour:** after successful login, the app navigates to `/`
-(`features/auth/login/login.ts`), which redirects to `bitzas`
-(`app.routes.ts`'s `{ path: '', redirectTo: 'bitzas', pathMatch: 'full' }`),
-which itself redirects to the root bitza's detail page via
-`redirectToRootGuard`.
+Kept brief on purpose — the blow-by-blow has been dropped; see
+`bitza_context_restoration.md`'s "Lessons learned" section for what's
+still worth carrying forward (the guards-don't-protect-siblings lesson in
+particular came directly out of this stage).
 
-**Fix:** one line.
-
-```ts
-// app.routes.ts
-{ path: '', redirectTo: 'bitzas', pathMatch: 'full' },   // → redirectTo: 'me'
-```
-
-**Worth a look while you're in there:** a fresh, not-yet-bootstrapped
-deployment (no root bitza created via the CLI yet) currently falls through
-`redirectToRootGuard` to `BitzaBrowser`'s own "not set up yet" message. Once
-the default lands on `/me` instead, that message won't be the first thing a
-fresh admin sees — `/me` will just show empty "nothing checked out" / "not
-on any Projects" states instead, which doesn't clearly say the *system*
-isn't bootstrapped yet. Not blocking; worth a decision (give `/me` a similar
-empty/setup state, or accept the gap since an admin can just visit `/bitzas`
-directly).
+1. **Login now lands on `/me`**, not `/bitzas` — a one-line default-route
+   fix (`app.routes.ts`).
+2. **Root bitza locked down** — `PATCH` accepts `name` only, admin/
+   superuser only; `reassign-team` blocked on it unconditionally too
+   (found while implementing, not in the original ask). See
+   `bitza_project_context.md`'s Hierarchy section.
+3. **Stock bitzas can't have children** — enforced on create, on move,
+   and on the kind transition itself. See `bitza_project_context.md`'s
+   `kind` section.
+4. **Team → Project, frontend** — `AppConfigService` and its toggle
+   removed; UI always says "Project"/"Projects" now. See
+   `bitza_project_context.md`'s "Teams" section.
 
 ---
 
-## 2. Root bitza should be locked down — name-only, admin-only
+## Stage 6 (next, not started) — Team → Project, backend
 
-**Already protected (`bitza_service.py`):** the root bitza (the one tracked
-in `SystemConfig.root_bitza_id`) can't be **deleted**, **retired**, or
-**moved** (`parent_id` change) — all three raise `RootBitzaProtectedError`
-(409) unconditionally, regardless of role. See `update_bitza`,
-`delete_bitza`, `retire_bitza`.
+**Not yet scoped — needs a discussion before any patches get cut.** This
+reverses what `bitza_project_context.md` used to say ("the database and
+API stay named `Team` — never in question"); that section has already
+been updated to reflect the reversal. The frontend-only pass (Stage 5,
+item 4 above) is done; this is the equivalent move for everything Stage 5
+deliberately left alone.
 
-**What's missing:** ordinary field edits via `PATCH /bitzas/{id}` are not
-guarded for the root at all. `name`, `description`, `category_id`,
-`responsible_team_id`, `tags`, `vendor`, `purchase_date`, `order_url`, and
-— since the `kind` editability work — `kind`/`stock_mode`/`quantity`/
-`fuzzy_state`/`low_stock_threshold` can currently all be changed on the
-root by any authenticated user. This became a *live* risk specifically
-because of kind editability — before that patch, `kind` was immutable for
-every bitza including root, so this gap had no way to actually bite yet.
+**What's known to be involved, at minimum** (informational, not a
+commitment to this exact scope — flagging so a scoping conversation has
+somewhere to start):
 
-**Requested behaviour:** the root bitza should only ever have its `name`
-changed, and only by an admin (or superuser). Every other field should be
-rejected outright.
+- `models/team.py` — the SQLAlchemy model and its table name.
+- An Alembic migration to actually rename the table/columns (`teams`,
+  `team_id` FKs across `bitzas`, `team_members`, `checkouts`'
+  `team_context` is free-text so likely untouched — worth confirming).
+- `schemas/team.py` — `Team`/`TeamCreate`/`TeamRead`/`TeamListRead`/
+  `TeamMemberRead` and friends.
+- `repositories/team_repository.py`, `services/team_service.py`.
+- `api/v1/endpoints/teams.py` and the route prefix itself
+  (`/api/v1/teams/` → presumably `/api/v1/projects/`).
+- Backend tests (`tests/test_teams.py` and any cross-references in
+  `test_bitzas.py`).
+- The frontend's own `Team`-named identifiers that Stage 5 deliberately
+  left alone — models, services, route paths (`/teams`), component/class/
+  file names (`TeamsList`, `team-detail.ts`, etc.) — since the frontend
+  was scoped as display-labels-only last time, all of this still says
+  `Team` today and would need revisiting if the backend rename lands.
 
-**Suggested approach:**
+**Open questions worth settling before starting, not during:**
+- Does the route path change (`/teams` → `/projects`) at the same time,
+  or does the backend rename land first with routes following later?
+  A route change is more disruptive than a table rename (bookmarks,
+  any external integrations) and may warrant its own decision.
+- Same question for the frontend's internal naming (files/classes/CSS) —
+  worth doing as part of this, or a separate future pass? Stage 5 treated
+  this as explicitly out of scope; that call is worth revisiting now that
+  the backend is following, not just the display text.
+- Migration strategy for existing deployments (rename in place vs.
+  additive-then-cutover) — depends on whether this project has any real
+  deployments with data yet worth worrying about.
 
-- In `update_bitza`, alongside the existing `bitza_id == root_bitza_id`
-  check for `parent_id`, add a root-specific branch: if this bitza is the
-  root, only `name` may be present in the payload at all — reject the
-  *whole* request (not a partial-apply) if anything else is set, and
-  require `actor.role in (admin, superuser)` even for the `name` change
-  (mirrors the check already in `delete_bitza`).
-- Decide the error split: a non-admin touching `name` is probably
-  `PermissionDeniedError` (403); any other field being present is
-  `RootBitzaProtectedError` (409), matching the existing unconditional
-  delete/retire/move protection. If both are true at once (non-admin *and*
-  non-name fields), which wins is a minor call — 403 is probably the more
-  useful answer, but either is defensible.
-- No separate "kind must stay fixed" check is needed beyond "nothing but
-  `name` is editable at all" — the root is always created with
-  `kind='fixed'` (`create_root_bitza`) and this same guard is what keeps it
-  that way now that `kind` is generally PATCH-able.
-- Frontend: `BitzaFormDialog` should reflect this when editing the root —
-  probably hide/disable every field but `name` (same pattern already used
-  for the conditionally-editable `kind`/`stock_mode` fields), and only let
-  a non-admin open the dialog read-only or not at all. `bitza.is_root` is
-  already on `BitzaListRead`/`BitzaRead` for detecting this client-side —
-  as always in this app, the backend guard is the real authority and the
-  frontend change is purely for a better, error-free experience.
-
----
-
-## 3. Stock bitzas should never have children
-
-**Current behaviour:** nothing enforces this anywhere. `create_bitza` never
-checks the parent's `kind` — a stock bitza can be given children today via
-`POST /bitzas/` with `parent_id` pointing at it. Same gap in
-`update_bitza`'s `parent_id`-change path (moving a bitza under a stock
-parent). And, from the recent kind-editability work, in the kind-transition
-block itself: changing a `fixed`/`mobile` bitza's kind *to* `stock` doesn't
-check whether it already has children.
-
-**Frontend:** `BitzaBrowser`'s "Add here" button (per-bitza card actions) is
-shown unconditionally regardless of the current bitza's `kind` — no
-client-side signal exists yet that this shouldn't be offered under a stock
-item.
-
-**Suggested approach:**
-
-- Backend, three call sites in `bitza_service.py`:
-  1. `create_bitza` — after resolving `data.parent_id`'s bitza, reject
-     with `ConflictError` (409) if its `kind == BitzaKind.stock`.
-  2. `update_bitza`'s `parent_id`-change branch — same check against the
-     new parent.
-  3. The kind-transition block (kind editability) — when transitioning
-     *to* `stock`, reject if `self._bitzas.count_children(bitza_id) > 0`
-     (the same `count_children` method `delete_bitza` already uses).
-- A small shared helper (e.g. `_reject_if_parent_is_stock(parent)`) called
-  from (1) and (2) avoids duplicating the check/message.
-- Frontend: hide "Add here" in `BitzaBrowser` when the bitza being viewed
-  (the prospective parent) has `kind === 'stock'` — same cheap
-  kind-conditional-UI pattern used elsewhere.
-- Worth a test for all three paths. No data-migration concern — nothing
-  has ever allowed a stock item to have children, so this is a pure
-  validation gap, not a data-repair job.
-
----
-
-## 4. Settle on "Project" — remove the Team/Project ambiguity
-
-**Decided** — see `bitza_project_context.md`'s "Team vs Project label"
-section (updated to reflect this). The product will always call it
-"Project" in the UI. The backend/API stays named `Team` throughout (table,
-model, field names like `responsible_team_id`, endpoint paths like
-`/api/v1/teams/`) — still purely a **display-label** decision, same as the
-original framing. Nothing about the schema or wire format changes.
-
-**Current implementation:** `AppConfigService`
-(`core/services/app-config.service.ts`) holds this as a runtime signal
-(`'team' | 'project'`), defaulting to `'team'`, persisted to `localStorage`,
-with no settings screen anywhere to actually change it. `teamLabelSingular()`
-/ `teamLabelPlural()` are consumed in 8 components plus the service itself
-and a comment in `team.model.ts`: `teams-list.ts`, `team-form-dialog.ts`,
-`team-detail.ts`, `me-page.ts`, `bitza-browser.ts`,
-`reassign-team-dialog.ts`, `bitza-form-dialog.ts`, `app-shell.ts`.
-
-**Suggested approach — recommend removing the toggle, not just flipping its
-default:** the decision is now permanent rather than deployment-configurable,
-so a whole runtime/localStorage-backed toggle for a resolved question is
-unneeded complexity going forward. Recommend:
-
-- Delete `AppConfigService` (or gut it, if the injection token turns out to
-  be depended on elsewhere) and its `.spec.ts`.
-- Replace every `config.teamLabelSingular()` / `config.teamLabelPlural()`
-  call site with the literal strings `'Project'` / `'Projects'` (or a small
-  shared constant, if that reads better — a style call, not a design one).
-- Update the stale `AppConfigService` reference in the `team.model.ts`
-  comment.
-- If keeping some flexibility for a hypothetical future settings screen is
-  preferred over a full rip-out, the minimal alternative is just flipping
-  the default from `'team'` to `'project'` and leaving the toggle
-  infrastructure in place. Flag this choice if it's not obvious which is
-  wanted — simplicity now vs. optionality later is a real trade-off, not a
-  purely mechanical one.
-- No backend changes, no schema changes. No new tests needed beyond
-  anything that currently asserts on the literal word "Team" in rendered
-  text — unlikely, since no component-level tests exist yet (see
-  `bitza_frontend_context.md`'s Testing state section).
-
----
-
-## Suggested approach for the new chat
-
-All four are independent — no ordering dependency — but #2 and #3 both
-touch `update_bitza`'s kind-transition block (from the just-completed kind
-editability work), so doing them in the same backend pass is efficient. #1
-and #4 are frontend-only and much smaller.
-
-1. Read this doc, then re-confirm current `main` (`git log --oneline -5`) —
-   written against the tip right after kind editability shipped; re-check
-   the relevant files if anything's changed since.
-2. Backend: #2 (root lockdown) and #3 (stock-can't-have-children) together
-   in `bitza_service.py`, with tests.
-3. Frontend: #2 and #3's client-side reflections in
-   `BitzaFormDialog`/`BitzaBrowser`.
-4. #1 (login redirect) — trivial, do whenever.
-5. #4 (Team → Project) — mechanical, touches many files but low risk; good
-   as its own focused pass since it touches nearly every team-related
-   component.
+Once scoped, this should get the same treatment as Stage 5: divided into
+reviewable chunks (backend first, frontend second, matching how Stage 5
+was run), one patch file per chunk, applied one at a time.

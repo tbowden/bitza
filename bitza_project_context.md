@@ -196,19 +196,26 @@ purposes that look different but are structurally identical:
   "workshop manager" role — see below), each with several members.
 - **Home deployment**: one team, or a handful for distinct projects.
 
-**"Team" vs "Project" is a display-label choice, not a schema difference.**
-The database and API are named `Team` throughout, and stay that way — this
-part was never in question. **The label question itself is now settled:
-the product always calls it "Project" in the UI.** ("A team is
-indistinguishable from a project" was the reasoning — trying to
-distinguish "real teams" from "projects" added a distinction the schema
-never needed in the first place.) The frontend previously carried this as
-a runtime-configurable toggle (`AppConfigService`, defaulting to "Team");
-now that the choice is permanent rather than deployment-specific, that
-toggle is being removed in favour of just always showing "Project" — see
-`bitza_open_issues.md` for the implementation task. Nothing below this
-point changes: `Team`/`team_id`/`responsible_team_id`/`/api/v1/teams/`
-etc. remain the actual names everywhere outside the Angular UI text.
+**"Team" vs "Project" started as a display-label-only choice; the
+frontend side of that is done, and a backend rename is the next planned
+stage.** ("A team is indistinguishable from a project" is the underlying
+reasoning — trying to distinguish "real teams" from "projects" added a
+distinction the schema never needed.) The Angular UI now always says
+"Project"/"Projects" — `AppConfigService` and its runtime toggle were
+removed entirely in Stage 5 rather than kept as a settings option, since
+the choice turned out to be permanent, not deployment-specific.
+
+**This section previously said the database/API "stay named `Team`
+throughout — never in question." That's no longer the plan.** The next
+piece of work (Stage 6 — not yet started or scoped, see
+`bitza_open_issues.md`) is renaming the backend to match: model/table,
+schema classes, service/repository, and endpoint paths
+(`/api/v1/teams/` → presumably `/api/v1/projects/`), most likely needing
+an Alembic migration for the table/column rename. Until that lands,
+everything below this point in this document — `Team`, `team_id`,
+`responsible_team_id`, `/api/v1/teams/`, etc. — still reflects the
+current, real backend shape; read it as "what exists today," not as a
+settled decision.
 
 ### Workshop manager is not a special role
 
@@ -245,6 +252,10 @@ GET    /api/v1/teams/{id}/members          List members
 POST   /api/v1/teams/{id}/members          Add a member  {user_id, is_primary?}
 PATCH  /api/v1/teams/{id}/members/{user_id}  Set/unset primary  {is_primary}
 DELETE /api/v1/teams/{id}/members/{user_id}  Remove a member
+
+GET    /api/v1/teams/mine                  Current user's teams — {team_id, team_name,
+                                            is_primary} per row, one call, added for
+                                            the /me landing page (Stage 4/5)
 ```
 
 ---
@@ -273,23 +284,54 @@ bitzas — but note a toolbox could equally be modelled as `mobile` if you
 want to check the *whole box* out as a unit; the model doesn't force a
 choice here, it's just data.
 
-`kind` is currently fixed at creation — the backend's `BitzaUpdate`
-schema deliberately excludes it, on the reasoning that switching kind
-is "a re-creation, not an update" once a bitza has accumulated
-kind-specific history (Checkout rows for `mobile`, StockLog rows for
-`stock`). That reasoning holds, but given the "it's just data, the
-model doesn't force a choice" framing right above, early miscategorising
-is expected — this is flagged as an open design question (conditional
-editability once there's no such history, plus whether "type" reads
-better than "kind" as a label) in
-`bitza_schema_reconciliation_todo.md`'s "New design questions raised"
-section. Not decided or built as of this note.
+`kind` is **conditionally editable** via `PATCH` (settled in Stage 4,
+after early miscategorising turned out to be a real risk given the "it's
+just data" framing above): blocked away from `mobile` while any Checkout
+row exists, blocked away from `stock_mode='exact'` while any StockLog row
+exists (fuzzy-only stock, with no exact-mode history, stays switchable),
+and a change *to* `stock` reuses `BitzaCreate`'s own conditional-fields
+validation rather than duplicating it. Every `kind` change gets its own
+`CHANGE_KIND` audit action rather than folding into the generic `UPDATE`
+entry. The frontend labels this "Type" in UI text only — `bitza.kind` is
+unchanged as the property name and wire format, deliberately, to avoid
+colliding with the audit log's unrelated `entity_type` concept and
+because `type` shadows Python's builtin.
+
+**Stock bitzas can never have children** (Stage 5): enforced on create (a
+stock `parent_id` is rejected), on move (`PATCH parent_id` to a stock
+target is rejected), and on the kind transition itself (moving a bitza
+*to* `stock` is rejected while it still has any children) — all three via
+`ConflictError`/409. This wasn't in the original design; it was raised
+after noticing "stock" (resistors, screws) never conceptually needs to
+contain anything, unlike `fixed`/`mobile`.
 
 ### Hierarchy
 
-`parent_id` is a nullable self-referential FK. `NULL` = a root (e.g.
-"Workshop", "Garage"). Depth is unlimited — a bitza's "home" is simply
-wherever its `parent_id` currently points.
+`parent_id` is a self-referential FK, and **required on every ordinary
+create** — `BitzaCreate.parent_id` is `str`, not `Optional[str]`. There is
+exactly **one** root bitza in the whole tree, ever: a `SystemConfig`
+singleton row (`root_bitza_id`) points at it, created exactly once via
+the CLI's `create-root` command, never through `POST /bitzas/`. This
+section originally described `parent_id IS NULL` as meaning "a root, e.g.
+'Workshop', 'Garage'" as if there could be several independent top-level
+trees — that's not how it works: everything except the one root bitza has
+a parent, so "Workshop" and "Garage" would be direct children of the
+root, not roots themselves. Depth below the root is unlimited — a bitza's
+"home" is simply wherever its `parent_id` currently points.
+
+**The root bitza is locked down** (Stage 5): `PATCH` on it may only ever
+change `name`, and only an admin/superuser may do even that — every other
+field, and every other mutating endpoint that could touch it
+(`reassign-team` included), is rejected outright (`RootBitzaProtectedError`
+/409 for the field, `PermissionDeniedError`/403 for the role, role wins if
+both apply). This reflects the root's role as the tree's permanent,
+structural anchor rather than an ordinary bitza that happens to have no
+parent.
+
+`GET /bitzas/{id}/ancestors` returns the ancestor chain (nearest parent
+first, root last, excluding the bitza itself) via a recursive CTE — added
+so the frontend breadcrumb doesn't have to walk `GET /bitzas/{id}`
+repeatedly.
 
 **Moving a container never touches its contents.** If Toolbox 3 moves from
 the study to James' room, every tool inside it is still correctly located
@@ -392,6 +434,11 @@ workflow.
 POST /api/v1/bitzas/{id}/checkout   {team_context?, note?}   → 201, the open Checkout
 POST /api/v1/bitzas/{id}/checkin    {note?}                  → 200, the closed Checkout
 GET  /api/v1/bitzas/{id}/checkouts                           → history, newest first
+GET  /api/v1/checkouts/mine                                  → every open checkout held
+                                                                 by the current user,
+                                                                 across the whole tree —
+                                                                 not scoped to one bitza;
+                                                                 added for /me (Stage 4/5)
 ```
 
 The holder is always the current authenticated user — there is no checking
@@ -542,14 +589,20 @@ should be additive rather than a refactor:
 
 ---
 
-## Known decisions still to be made (frontend)
+## Frontend decisions that were once open — now resolved
 
-- **Token refresh strategy** — interceptor-based (transparent to the rest of
-  the app) vs explicit refresh calls. Interceptor is strongly recommended.
-- **Session persistence** — does the app stay logged in across browser
-  restarts? (Yes if using localStorage, no if sessionStorage.)
-- **Cascade-scope default heuristics** — whether the frontend infers a
-  sensible default scope from a bitza's `kind` (see "Reassigning
-  responsible team" above) or always asks explicitly.
-- **Offline behaviour** — out of scope for now; SQLite backend has no sync
-  capability.
+Kept briefly for the "why," not as a live checklist — all resolved during
+Stage 3:
+
+- **Token refresh**: interceptor-based (`auth.interceptor.ts`), not
+  explicit per-call refresh calls — transparent to the rest of the app.
+- **Session persistence**: `localStorage`, so the app stays logged in
+  across browser restarts.
+- **Cascade-scope defaults**: the frontend infers a default from the
+  bitza's `kind` (`mobile` → `all_descendants`, everything else → `none`),
+  always overridable — see "Reassigning responsible team" above. The
+  backend itself never infers a default; `cascade_scope` is always
+  required explicitly.
+
+**Still genuinely open**: offline behaviour — out of scope for now, the
+SQLite backend has no sync capability.

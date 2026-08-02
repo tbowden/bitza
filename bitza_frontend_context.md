@@ -93,14 +93,14 @@ features/
   if any list ever needs to handle real volume.
 - **Dialogs over dedicated routes** for all create/edit/confirm flows
   (Material's `MatDialog`, CDK-based, proper focus trapping for free).
-- **Team vs Project label**: was a runtime signal in `AppConfigService`,
-  persisted to `localStorage` (defaulting to "Team"), deliberately not a
-  build-time environment value — so a single deployment could flip the
-  label later from a settings screen (none exists yet) without a rebuild.
-  **The label question is now settled — always "Project"** — see
-  `bitza_project_context.md`'s "Teams" section and `bitza_open_issues.md`
-  for the removal-of-the-toggle task; this bullet describes the
-  as-of-this-writing implementation, not the target state.
+- **Team vs Project label**: settled as always "Project" (Stage 5) —
+  `AppConfigService` and its runtime `localStorage`-persisted toggle were
+  removed entirely rather than kept as a settings option, since the
+  choice turned out to be permanent, not deployment-specific. `Team`/
+  `team_id`/etc. remain the real backend and TypeScript identifiers
+  throughout (routes, class names, model fields) — only rendered UI text
+  changed. See `bitza_project_context.md`'s "Teams" section for the
+  now-planned backend rename (Stage 6, not started) this doesn't cover.
 - **`cascade_scope` UI defaults** (reassign-team dialog): `fixed`/`stock`
   → `none`, `mobile` → `all_descendants`, always overridable. This is
   frontend-only convenience — the backend never infers or defaults this
@@ -111,6 +111,16 @@ features/
   revoking them both on list changes and component destroy. Deliberately
   does **not** show thumbnails in any list/table view (would mean an
   authenticated blob fetch per row) — images are detail-view-only for now.
+- **Root bitza and stock-can't-have-children guards, reflected client-side**
+  (Stage 5, mirroring the backend rules in `bitza_project_context.md`'s
+  Hierarchy/`kind` sections): `BitzaFormDialog` shows only the Name field
+  (plus a note) when editing the root, and disables "Stock" in the Type
+  dropdown when the bitza already has children; `BitzaBrowser` hides "Add
+  here" for stock bitzas and "Edit"/"Reassign" for non-admins on the root;
+  `MoveBitzaDialog` disables "Move here" while browsing into a stock
+  location. All of these are UX conveniences on top of backend
+  enforcement, not the enforcement itself — the backend rejects the same
+  cases independently.
 
 ### Component file structure — inconsistent, on purpose (for now)
 
@@ -171,22 +181,24 @@ Angular version bumps and something stops working.
 ## Milestone summary
 
 1. **Foundation** — Material setup, design tokens, models for every API
-   entity, `AuthService`/`TokenStorageService`/`AppConfigService`, the
-   auth interceptor (401 → refresh → retry, with request-queuing so
-   concurrent 401s trigger exactly one refresh call), route guards, the
-   login page (first real Signal Forms usage), app shell.
+   entity, `AuthService`/`TokenStorageService`/`AppConfigService` (the
+   last of these later removed in Stage 5 — see "Team vs Project label"
+   above), the auth interceptor (401 → refresh → retry, with
+   request-queuing so concurrent 401s trigger exactly one refresh call),
+   route guards, the login page (first real Signal Forms usage), app
+   shell.
 2. **Teams** — full CRUD, membership management (add via searchable
    user picker, remove, primary toggle), Team/Project label applied
    throughout.
 3. **Bitzas core** — the tree browser (`/bitzas`, `/bitzas/:id`),
    breadcrumb powered by `GET /bitzas/{id}/ancestors` (one call;
    originally built client-side via RxJS `expand` walking `parent_id` one
-   hop at a time — replaced once the endpoint was added, see
-   `bitza_schema_reconciliation_todo.md`), create/edit with
-   kind-conditional fields, retire/reactivate, reassign-team with
-   cascade_scope, category management, QR label generation + a
-   `/bitza/:id` → `/bitzas/:id` redirect route matching the exact
-   singular path the docs say gets baked into printed physical tags.
+   hop at a time — replaced once the endpoint was added during Stage 4),
+   create/edit with kind-conditional fields, retire/reactivate,
+   reassign-team with cascade_scope, category management, QR label
+   generation + a `/bitza/:id` → `/bitzas/:id` redirect route matching
+   the exact singular path the docs say gets baked into printed physical
+   tags.
 4. **Bitza actions** — checkout/check-in (status always derived from
    history, never a stored field, matching the backend design exactly),
    stock adjustments (in/out toggle → signed delta, live negative-result
@@ -198,62 +210,53 @@ Angular version bumps and something stops working.
    admin-on-plain-users, nobody can act on their own account), audit log
    with user/action filters, plus a dedicated accessibility pass (see
    below).
-6. **Post-reconciliation** — `/me` personal landing page (checked-out
-   items across the whole tree with a check-in action, your teams with
-   the primary one starred); `kind` editability (conditional on
-   checkout/stock-log history, confirmation dialog, "Type" as the UI
-   label); the `stock_mode`-inert-during-edit bug (superseded by the
-   above); breadcrumb switched to the new `/ancestors` endpoint. See
-   `bitza_schema_reconciliation_todo.md` for what shipped in detail, and
-   `bitza_open_issues.md` for what came out of it.
+6. **Post-reconciliation and fixes (Stages 4–5)** — `/me` personal
+   landing page and its default-login-route wiring; `kind` editability
+   (conditional on checkout/stock-log history, confirmation dialog,
+   "Type" as the UI label) plus its own missed guard (stock bitzas
+   can't have children — enforced on create, move, and the kind
+   transition itself, with matching frontend disable/hide treatment);
+   root bitza locked to name-only/admin-only editing, both backend and
+   frontend; Team→Project label rip-out (`AppConfigService` removed).
+   See `bitza_project_context.md` for the current backend shape of all
+   of this, and `bitza_open_issues.md` for what's next.
 
 ---
 
 ## Schema drift between frontend models and the live backend — resolved
 
-**This is done.** `bitza_schema_reconciliation_todo.md` has the full
-history — 16 patches (`0001`–`0016`), applied and pushed. Short version
-of what happened: the frontend was built from `bitza_project_context.md`'s
-prose description of the API, and in several places that description
-(and therefore the frontend) had drifted from what the backend's actual
-Pydantic schemas define. That was found by reading `backend/app/schemas/*.py`
-directly, not by observing a failure — this project still has never had
-a live click-through against a running backend (see "Stage 3 caveats"
-above, which still applies).
-
-Five things were confirmed completely non-functional and are now fixed:
-creating a user (missing required `display_name`), suspend/unsuspend
-(backend uses `is_active` — opposite polarity from the frontend's old
-`is_suspended`), checkout holder display (`holder_id` vs `user_id`),
-team member names (`user_display_name` vs assumed `username`/`email`),
-and audit log summaries (`description` vs `summary`). A full
-completeness pass on top of that (Bitza, Team, Category, StockLog,
-BitzaImage, and others) surfaced two more real, live bugs along the
-way — exact-mode stock quantities showing blank in the bitza children
-table, and team descriptions never rendering in the teams grid — both
-from the same root cause: list endpoints return a deliberately-compact
-schema, and the frontend had been using one type for both list and
-detail responses, papering over fields the list response never actually
-sent.
-
-The one thing already fully confirmed clean throughout: **Auth**
-(`schemas/auth.py`) matches the frontend exactly — no drift there.
+**This is done and no longer tracked in a dedicated document** — the
+16-patch history has been dropped in favor of the durable lesson: the
+frontend was originally built from `bitza_project_context.md`'s prose
+description of the API, and in several places that description (and
+therefore the frontend) had drifted from what the backend's actual
+Pydantic schemas define. Five things were confirmed completely
+non-functional purely from field-name/polarity mismatches — creating a
+user (missing required `display_name`), suspend/unsuspend (backend
+`is_active`, opposite polarity from the frontend's old `is_suspended`),
+checkout holder display (`holder_id` vs `user_id`), team member names
+(`user_display_name` vs assumed `username`/`email`), and audit log
+summaries (`description` vs `summary`) — found by reading
+`backend/app/schemas/*.py` directly, not by reproducing a failure. A
+follow-up completeness pass surfaced two more live bugs from a different
+root cause: list endpoints deliberately return a more compact schema than
+detail endpoints, and the frontend had been using one TypeScript type for
+both, silently dropping fields the list response never actually sent
+(exact-mode stock quantities and team descriptions both went blank in
+grid/table views for exactly this reason). **Auth** (`schemas/auth.py`)
+was the one area confirmed to have no drift at all.
 
 **The `GET /api/v1/users/` permission question is resolved too** — it's
-genuinely, deliberately admin/superuser-gated (confirmed by a passing
-backend test), which broke the team-member-add picker for any
-non-admin user. Fixed by adding a new `GET /users/directory` endpoint
-(any authenticated user, id + display_name only — no email/role/
-is_active) rather than relaxing the existing gate or restricting
-add-member to admins. See `bitza_schema_reconciliation_todo.md` for the
-full reasoning.
+genuinely, deliberately admin/superuser-gated, which broke the
+team-member-add picker for any non-admin user. Fixed by adding a new
+`GET /users/directory` endpoint (any authenticated user, id +
+display_name only) rather than relaxing the existing gate.
 
-**Two design questions came out of this work — both now resolved and
-built.** A personal `/me` landing page, and `kind` editability (relabelled
-"Type" in the UI). See `bitza_schema_reconciliation_todo.md`'s "New design
-questions raised" section for what actually shipped for each, and
-`bitza_open_issues.md` for four smaller items that came out of finishing
-this work.
+**Two design questions came out of this work — both resolved and built**
+during Stage 4: a personal `/me` landing page (`GET /checkouts/mine`,
+`GET /teams/mine` — see `bitza_project_context.md`), and `kind`
+editability, relabelled "Type" in the UI (see `bitza_project_context.md`'s
+`kind` section for the final conditional-editability rules).
 
 ---
 
@@ -290,13 +293,22 @@ a process risk rather than a one-off mistake:
 
 ## Testing state
 
+- **The project owner is now running the frontend against a live backend
+  directly** and using that to decide what needs fixing — this is new as
+  of Stage 5, and is how Stage 5's four issues were found. It's real
+  verification but not exhaustive: no formal QA pass, no systematic
+  click-through of every screen, ongoing rather than complete. Treat
+  "hasn't been reported as broken" as weaker evidence than "confirmed
+  working," and expect further issues to keep surfacing this way rather
+  than through code review alone.
 - **42 unit tests across 11 spec files**, all at the service layer
   (`core/services/*.spec.ts`) plus one guard spec
   (`core/guards/redirect-to-root.guard.spec.ts`), using
   `HttpTestingController` to assert on request method/URL/body/params —
-  not component tests. (Grew 35/10 → 39/11 during the schema-reconciliation
-  work, then → 42/11 during the `/me`/`kind`-editability work — see
-  `bitza_schema_reconciliation_todo.md`.)
+  not component tests. Unchanged since the `/me`/`kind`-editability work;
+  Stage 5's four fixes added no new tests (matches the "no
+  component-level tests exist" gap below — the components touched had
+  none to extend).
 - **No component-level tests exist.** Nothing exercises a component's
   template, user interactions, or rendered output.
 - **No e2e tests.**
@@ -333,10 +345,10 @@ plus a few frontend-specific scope cuts made along the way:
   out" across the whole club, "recent stock activity" feed) — nothing in
   the docs originally asked for this; only per-bitza history exists.
   **Partially built** — a personal (not club-wide) version of "what's
-  checked out" now exists as the `/me` landing page (see
-  `bitza_schema_reconciliation_todo.md`'s "New design questions raised" →
-  A). Still not built: low-stock alerts, and a "recent activity" feed —
-  the latter was explicitly left undecided, not just unbuilt.
+  checked out" now exists as the `/me` landing page (`GET
+  /checkouts/mine`, `GET /teams/mine` — see `bitza_project_context.md`).
+  Still not built: low-stock alerts, and a "recent activity" feed — the
+  latter was explicitly left undecided, not just unbuilt.
 - **Component test suite, e2e suite, real accessibility audit** — see
   Testing state above.
 - **Milestone 1–4 inline-template retrofit** — see Architecture
