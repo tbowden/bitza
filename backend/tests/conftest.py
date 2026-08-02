@@ -20,7 +20,7 @@ from app.db.session import get_db
 from app.main import app
 from app.models.base import Base
 from app.models.token import RefreshToken  # noqa: F401
-from app.models.team import Team, TeamMember  # noqa: F401
+from app.models.project import Project, ProjectMember  # noqa: F401
 from app.models.category import Category  # noqa: F401 — ensure table is registered
 from app.models.bitza import Bitza, BitzaImage, BitzaKind, Checkout, StockLog  # noqa: F401
 from app.models.audit import AuditLog  # noqa: F401
@@ -163,7 +163,7 @@ def normal_user(db: Session) -> User:
 @pytest.fixture()
 def second_user(db: Session) -> User:
     """A second normal user — needed for tests that require two distinct
-    holders/members (team membership, checkout-to-another-user cases)."""
+    holders/members (project membership, checkout-to-another-user cases)."""
     user = User(
         email="second@example.com",
         username="seconduser",
@@ -237,41 +237,41 @@ def second_user_token(client: TestClient, second_user: User) -> str:
 
 
 # ---------------------------------------------------------------------------
-# A default team — most bitza tests need one to satisfy the mandatory
-# responsible_team_id field, so it's provided as a fixture rather than
+# A default project — most bitza tests need one to satisfy the mandatory
+# responsible_project_id field, so it's provided as a fixture rather than
 # re-created in every test module.
 # ---------------------------------------------------------------------------
 
 @pytest.fixture()
-def default_team(db: Session) -> Team:
-    team = Team(name="Workshop", description="Default test team")
-    db.add(team)
+def default_project(db: Session) -> Project:
+    project = Project(name="Workshop", description="Default test project")
+    db.add(project)
     db.flush()
-    return team
+    return project
 
 
 @pytest.fixture(autouse=True)
-def root_bitza(db: Session, default_team: Team) -> Bitza:
+def root_bitza(db: Session, default_project: Project) -> Bitza:
     """
     Every test gets a root bitza automatically. Ordinary bitza creation
     now always requires a parent — the root is meant to be created
     exactly once, via the CLI's create-root command, never through the
     ordinary POST /bitzas/ endpoint (see BitzaCreate.parent_id,
     BitzaService.create_root_bitza). Built directly via ORM, bypassing
-    create_root_bitza, matching how default_team above bypasses its own
+    create_root_bitza, matching how default_project above bypasses its own
     service layer — there's no HTTP path that could create this for us
     anyway. Autouse + conftest-level (rather than local to
-    test_bitzas.py) because test_teams.py also creates bitzas via the API
+    test_bitzas.py) because test_projects.py also creates bitzas via the API
     and needs one to exist too; harmless for test files that don't touch
     bitzas at all (test_cli.py manages its own isolated DB entirely and
     never requests this fixture; no other file asserts an exact global
-    count of bitzas/teams that an extra row here would upset).
+    count of bitzas/projects that an extra row here would upset).
     """
     root = Bitza(
         name="Test Root",
         kind=BitzaKind.fixed,
         parent_id=None,
-        responsible_team_id=default_team.id,
+        responsible_project_id=default_project.id,
     )
     db.add(root)
     db.flush()

@@ -32,7 +32,7 @@ from app.repositories.category_repository import CategoryRepository
 from app.repositories.checkout_repository import CheckoutRepository
 from app.repositories.stock_log_repository import StockLogRepository
 from app.repositories.system_config_repository import SystemConfigRepository
-from app.repositories.team_repository import TeamRepository
+from app.repositories.project_repository import ProjectRepository
 from app.repositories.user_repository import UserRepository
 from app.schemas.audit import AuditLogRead
 from app.schemas.category import CategoryCreate, CategoryRead, CategoryUpdate
@@ -48,8 +48,8 @@ from app.schemas.bitza import (
     CheckoutCreate,
     CheckoutRead,
     MyCheckoutRead,
-    ReassignTeamRequest,
-    ReassignTeamResponse,
+    ReassignProjectRequest,
+    ReassignProjectResponse,
     StockAdjustmentCreate,
     StockAdjustmentRead,
 )
@@ -80,8 +80,8 @@ class BitzaService:
     restricted to admin/superuser, because a delete makes the record
     disappear entirely rather than just flagging it retired.
 
-    Cascading team reassignment is the one place this service walks a
-    full subtree — see reassign_team — and it is always a distinct,
+    Cascading project reassignment is the one place this service walks a
+    full subtree — see reassign_project — and it is always a distinct,
     explicit action, never an implicit side-effect of an ordinary edit.
     """
 
@@ -89,7 +89,7 @@ class BitzaService:
         self,
         db: Session,
         bitza_repo: BitzaRepository,
-        team_repo: TeamRepository,
+        project_repo: ProjectRepository,
         category_repo: CategoryRepository,
         user_repo: UserRepository,
         checkout_repo: CheckoutRepository,
@@ -100,7 +100,7 @@ class BitzaService:
     ) -> None:
         self._db = db
         self._bitzas = bitza_repo
-        self._teams = team_repo
+        self._projects = project_repo
         self._categories = category_repo
         self._users = user_repo
         self._checkouts = checkout_repo
@@ -172,7 +172,7 @@ class BitzaService:
             return None
         return self._enrich_bitza(root, root_id=config.root_bitza_id)
 
-    def create_root_bitza(self, name: str, responsible_team_id: str) -> BitzaRead:
+    def create_root_bitza(self, name: str, responsible_project_id: str) -> BitzaRead:
         """
         Create the single, permanent root of the bitza tree.
 
@@ -186,15 +186,15 @@ class BitzaService:
         """
         if self._system_config.get():
             raise RootBitzaExistsError()
-        if not self._teams.get(responsible_team_id):
-            raise _not_found("Responsible team not found")
+        if not self._projects.get(responsible_project_id):
+            raise _not_found("Responsible project not found")
 
         root = Bitza(
             id=str(uuid.uuid4()),
             name=name,
             kind=BitzaKind.fixed,
             parent_id=None,
-            responsible_team_id=responsible_team_id,
+            responsible_project_id=responsible_project_id,
         )
         created = self._bitzas.create(root)
         self._system_config.create(root_bitza_id=created.id)
@@ -224,7 +224,7 @@ class BitzaService:
         ordinary PATCH may only ever change `name`, and only an
         admin/superuser may do even that (mirrors the role check already
         in delete_bitza). Everything else about the root — kind, parent,
-        responsible team, stock fields, and so on — is fixed for the
+        responsible project, stock fields, and so on — is fixed for the
         life of the deployment once create_root_bitza runs.
 
         Rejects the whole request rather than silently dropping the
@@ -264,8 +264,8 @@ class BitzaService:
             if not parent:
                 raise _not_found("Parent bitza not found")
             self._reject_if_parent_is_stock(parent)
-        if not self._teams.get(data.responsible_team_id):
-            raise _not_found("Responsible team not found")
+        if not self._projects.get(data.responsible_project_id):
+            raise _not_found("Responsible project not found")
         if data.category_id and not self._categories.get(data.category_id):
             raise _not_found("Category not found")
 
@@ -277,7 +277,7 @@ class BitzaService:
             description=data.description,
             kind=data.kind,
             parent_id=data.parent_id,
-            responsible_team_id=data.responsible_team_id,
+            responsible_project_id=data.responsible_project_id,
             category_id=data.category_id,
             tags=data.tags or [],
             purchased_by_user_id=purchased_by,
@@ -315,7 +315,7 @@ class BitzaService:
         root_only: bool = False,
         kind: Optional[BitzaKind] = None,
         status_filter: Optional[BitzaStatus] = None,
-        responsible_team_id: Optional[str] = None,
+        responsible_project_id: Optional[str] = None,
         category_id: Optional[str] = None,
     ) -> list[BitzaListRead]:
         root_id = self._get_root_bitza_id()
@@ -328,7 +328,7 @@ class BitzaService:
             bitzas = self._bitzas.list_filtered(
                 kind=kind,
                 status=status_filter,
-                responsible_team_id=responsible_team_id,
+                responsible_project_id=responsible_project_id,
                 category_id=category_id,
             )
             return [self._enrich_bitza_list(b, root_id=root_id) for b in bitzas]
@@ -340,8 +340,8 @@ class BitzaService:
             bitzas = [b for b in bitzas if b.kind == kind]
         if status_filter is not None:
             bitzas = [b for b in bitzas if b.status == status_filter]
-        if responsible_team_id is not None:
-            bitzas = [b for b in bitzas if b.responsible_team_id == responsible_team_id]
+        if responsible_project_id is not None:
+            bitzas = [b for b in bitzas if b.responsible_project_id == responsible_project_id]
         if category_id is not None:
             bitzas = [b for b in bitzas if b.category_id == category_id]
         return [self._enrich_bitza_list(b, root_id=root_id) for b in bitzas]
@@ -370,10 +370,10 @@ class BitzaService:
                 )
             bitza.parent_id = data.parent_id
 
-        if data.responsible_team_id is not None:
-            if not self._teams.get(data.responsible_team_id):
-                raise _not_found("Responsible team not found")
-            bitza.responsible_team_id = data.responsible_team_id
+        if data.responsible_project_id is not None:
+            if not self._projects.get(data.responsible_project_id):
+                raise _not_found("Responsible project not found")
+            bitza.responsible_project_id = data.responsible_project_id
 
         if data.name is not None:
             bitza.name = data.name
@@ -555,15 +555,15 @@ class BitzaService:
         return self._enrich_bitza(updated, root_id=self._get_root_bitza_id())
 
     # ------------------------------------------------------------------
-    # Team reassignment — the one place this service walks a full subtree
+    # Project reassignment — the one place this service walks a full subtree
     # ------------------------------------------------------------------
 
-    def reassign_team(
-        self, bitza_id: str, data: ReassignTeamRequest, actor: User
-    ) -> ReassignTeamResponse:
+    def reassign_project(
+        self, bitza_id: str, data: ReassignProjectRequest, actor: User
+    ) -> ReassignProjectResponse:
         """
         cascade_scope is required on the request and is never inferred —
-        see ReassignTeamRequest's docstring. "none" behaves like a plain
+        see ReassignProjectRequest's docstring. "none" behaves like a plain
         PATCH but produces a dedicated, single audit entry summarising
         the whole sweep (not one row per affected bitza, so a large
         cascade doesn't flood the log).
@@ -572,18 +572,18 @@ class BitzaService:
         if not bitza:
             raise _not_found("Bitza not found")
         if bitza_id == self._get_root_bitza_id():
-            # This endpoint changes responsible_team_id directly and
+            # This endpoint changes responsible_project_id directly and
             # never routed through update_bitza's guard — unconditional,
             # matching delete/retire/move rather than the admin-only
             # name exception, since there's no field here that's ever
             # legitimately editable on the root.
             raise RootBitzaProtectedError(
-                "The root bitza's responsible team can never be changed — "
+                "The root bitza's responsible project can never be changed — "
                 "its name is the only editable field."
             )
-        team = self._teams.get(data.team_id)
-        if not team:
-            raise _not_found("Team not found")
+        project = self._projects.get(data.project_id)
+        if not project:
+            raise _not_found("Project not found")
 
         affected: list[Bitza] = [bitza]
         if data.cascade_scope == "direct_children":
@@ -599,18 +599,18 @@ class BitzaService:
             )
 
         for b in affected:
-            b.responsible_team_id = data.team_id
+            b.responsible_project_id = data.project_id
             self._bitzas.update(b)
 
         self._write_audit(
-            "bitza", bitza_id, "REASSIGN_TEAM", actor.id,
-            f"Reassigned to team '{team.name}' (scope={data.cascade_scope}, "
+            "bitza", bitza_id, "REASSIGN_PROJECT", actor.id,
+            f"Reassigned to project '{project.name}' (scope={data.cascade_scope}, "
             f"{len(affected)} bitza(s) affected)",
         )
         self._db.commit()
-        return ReassignTeamResponse(
+        return ReassignProjectResponse(
             bitza_id=bitza_id,
-            team_id=data.team_id,
+            project_id=data.project_id,
             cascade_scope=data.cascade_scope,
             updated_count=len(affected),
         )
@@ -660,18 +660,18 @@ class BitzaService:
             holder = self._user_display_name(existing.holder_id) if existing.holder_id else "someone"
             raise ConflictError(f"Already checked out to {holder}")
 
-        team_context = data.team_context
-        if team_context is None:
-            primary = self._teams.get_primary_membership(actor.id)
+        project_context = data.project_context
+        if project_context is None:
+            primary = self._projects.get_primary_membership(actor.id)
             if primary:
-                team = self._teams.get(primary.team_id)
-                team_context = team.name if team else None
+                project = self._projects.get(primary.project_id)
+                project_context = project.name if project else None
 
         checkout = Checkout(
             id=str(uuid.uuid4()),
             bitza_id=bitza_id,
             holder_id=actor.id,
-            team_context=team_context,
+            project_context=project_context,
             note=data.note,
         )
         created = self._checkouts.create(checkout)
@@ -903,8 +903,8 @@ class BitzaService:
             r.parent_name = parent.name if parent else None
         r.child_count = self._bitzas.count_children(bitza.id)
 
-        team = self._teams.get(bitza.responsible_team_id)
-        r.responsible_team_name = team.name if team else ""
+        project = self._projects.get(bitza.responsible_project_id)
+        r.responsible_project_name = project.name if project else ""
 
         if bitza.category_id:
             cat = self._categories.get(bitza.category_id)
@@ -929,8 +929,8 @@ class BitzaService:
         if bitza.parent_id:
             parent = self._bitzas.get(bitza.parent_id)
             r.parent_name = parent.name if parent else None
-        team = self._teams.get(bitza.responsible_team_id)
-        r.responsible_team_name = team.name if team else ""
+        project = self._projects.get(bitza.responsible_project_id)
+        r.responsible_project_name = project.name if project else ""
         if bitza.category_id:
             cat = self._categories.get(bitza.category_id)
             r.category_name = cat.name if cat else None
@@ -951,7 +951,7 @@ class BitzaService:
             bitza_id=checkout.bitza_id,
             bitza_name=bitza.name if bitza else "(deleted)",
             bitza_kind=bitza.kind if bitza else None,
-            team_context=checkout.team_context,
+            project_context=checkout.project_context,
             checked_out_at=checkout.checked_out_at,
             note=checkout.note,
         )

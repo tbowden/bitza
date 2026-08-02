@@ -45,7 +45,7 @@ class BitzaImageRepository:
         self._db.flush()
 
     def unset_primary_for_bitza(self, bitza_id: str) -> None:
-        """Same rotation pattern used for refresh tokens and primary team
+        """Same rotation pattern used for refresh tokens and primary project
         membership — unset the old primary before the caller sets a new
         one, inside the same transaction."""
         existing = self.get_primary(bitza_id)

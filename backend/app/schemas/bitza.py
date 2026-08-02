@@ -19,11 +19,11 @@ class BitzaCreate(BaseModel):
         quantity/low_stock_threshold).
       - kind in (fixed, mobile) forbids all stock_* fields entirely.
 
-    responsible_team_id is REQUIRED — there is no inheritance/resolution
+    responsible_project_id is REQUIRED — there is no inheritance/resolution
     at read time (see Bitza model docstring). The frontend is expected to
-    pre-fill this from the parent's responsible_team_id when adding a
+    pre-fill this from the parent's responsible_project_id when adding a
     child under an existing Bitza; the backend only validates presence
-    and that the team exists.
+    and that the project exists.
 
     parent_id is likewise REQUIRED (not Optional) — there is exactly one
     root bitza in the whole tree, created once via the CLI's create-root
@@ -37,7 +37,7 @@ class BitzaCreate(BaseModel):
     description: Optional[str] = None
     kind: BitzaKind
     parent_id: str
-    responsible_team_id: str
+    responsible_project_id: str
     category_id: Optional[str] = None
     tags: Optional[list[str]] = None
 
@@ -88,8 +88,8 @@ class BitzaCreate(BaseModel):
 class BitzaUpdate(BaseModel):
     """
     Ordinary, single-row edit — never cascades, regardless of kind. This
-    includes responsible_team_id: a plain PATCH may reassign it, but only
-    for this one row. Use POST /bitzas/{id}/reassign-team when you want an
+    includes responsible_project_id: a plain PATCH may reassign it, but only
+    for this one row. Use POST /bitzas/{id}/reassign-project when you want an
     explicit cascade scope and a dedicated audit trail entry for the sweep.
 
     kind IS conditionally editable (see BitzaService.update_bitza for the
@@ -117,7 +117,7 @@ class BitzaUpdate(BaseModel):
     description: Optional[str] = None
     kind: Optional[BitzaKind] = None
     parent_id: Optional[str] = None
-    responsible_team_id: Optional[str] = None
+    responsible_project_id: Optional[str] = None
     category_id: Optional[str] = None
     tags: Optional[list[str]] = None
 
@@ -201,8 +201,8 @@ class BitzaRead(BaseModel):
     child_count: int = 0                        # populated by service
     is_root: bool = False                        # populated by service — see SystemConfig
 
-    responsible_team_id: str
-    responsible_team_name: str = ""             # populated by service
+    responsible_project_id: str
+    responsible_project_name: str = ""             # populated by service
 
     category_id: Optional[str]
     category_name: Optional[str] = None         # populated by service
@@ -243,7 +243,7 @@ class BitzaListRead(BaseModel):
     kind: BitzaKind
     parent_id: Optional[str]
     parent_name: Optional[str] = None
-    responsible_team_name: str = ""
+    responsible_project_name: str = ""
     category_name: Optional[str] = None
     status: BitzaStatus
     quantity: Optional[int]
@@ -257,7 +257,7 @@ class BitzaAncestorRead(BaseModel):
     """
     Minimal shape for GET /bitzas/{id}/ancestors — just enough to link
     and label a breadcrumb, deliberately lighter than BitzaListRead
-    (no team/category lookups per ancestor). Ordered nearest parent
+    (no project/category lookups per ancestor). Ordered nearest parent
     first, root last — the same order BitzaRepository.get_ancestors()
     already computes; reversing a handful of items client-side for
     root-first breadcrumb display is cheaper than baking one specific
@@ -279,13 +279,13 @@ class BitzaRetire(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# Reassign team (with cascade)
+# Reassign project (with cascade)
 # ---------------------------------------------------------------------------
 
-class ReassignTeamRequest(BaseModel):
+class ReassignProjectRequest(BaseModel):
     """
     cascade_scope is REQUIRED — the backend never guesses a default. This
-    is the one place team-responsibility changes can affect more than a
+    is the one place project-responsibility changes can affect more than a
     single row, and it is always an explicit, separate action from an
     ordinary PATCH (see Bitza model + BitzaUpdate docstrings).
 
@@ -296,20 +296,20 @@ class ReassignTeamRequest(BaseModel):
 
     Which scope makes sense depends on mobility, not enforced by the
     backend: a cupboard's reassign dialog might default its scope-picker
-    to `none` (moving the cupboard between teams doesn't necessarily move
+    to `none` (moving the cupboard between projects doesn't necessarily move
     the shelves' contents), while a toolbox's might default to
     `all_descendants` (the tools inside travel with it). That default is
     purely a frontend UX choice — the backend accepts any scope for any
     kind and never infers one.
     """
 
-    team_id: str
+    project_id: str
     cascade_scope: str = Field(pattern="^(none|direct_children|all_descendants)$")
 
 
-class ReassignTeamResponse(BaseModel):
+class ReassignProjectResponse(BaseModel):
     bitza_id: str
-    team_id: str
+    project_id: str
     cascade_scope: str
     updated_count: int
 
@@ -320,13 +320,13 @@ class ReassignTeamResponse(BaseModel):
 
 class CheckoutCreate(BaseModel):
     """
-    team_context is optional — if omitted, BitzaService pre-fills it from
-    the holder's primary TeamMember (if they have one); either way it's a
+    project_context is optional — if omitted, BitzaService pre-fills it from
+    the holder's primary ProjectMember (if they have one); either way it's a
     snapshot at checkout time, never a live link. holder is always the
     current authenticated user — there is no "check out on behalf of
     someone else".
     """
-    team_context: Optional[str] = Field(None, max_length=150)
+    project_context: Optional[str] = Field(None, max_length=150)
     note: Optional[str] = None
 
 
@@ -341,7 +341,7 @@ class CheckoutRead(BaseModel):
     bitza_id: str
     holder_id: Optional[str]
     holder_display_name: str = ""   # populated by service
-    team_context: Optional[str]
+    project_context: Optional[str]
     checked_out_at: datetime
     checked_in_at: Optional[datetime]
     note: Optional[str]
@@ -358,7 +358,7 @@ class MyCheckoutRead(BaseModel):
     bitza_id: str
     bitza_name: str
     bitza_kind: Optional[BitzaKind] = None   # None only if the bitza row is gone
-    team_context: Optional[str]
+    project_context: Optional[str]
     checked_out_at: datetime
     note: Optional[str]
 

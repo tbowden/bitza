@@ -42,8 +42,8 @@ class UserService:
     "Browse the minimal directory" is list_directory()/GET
     /users/directory — id + display_name only, via UserDirectoryEntry.
     It exists specifically so any authenticated user can find another
-    user's id to power pickers like "add a member to this team" (see
-    TeamService.add_member, which is deliberately open to any user)
+    user's id to power pickers like "add a member to this project" (see
+    ProjectService.add_member, which is deliberately open to any user)
     without exposing the admin-only email/role/is_active fields that
     "List / view any user (full)" gates above.
 

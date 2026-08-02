@@ -12,12 +12,12 @@ from app.repositories.category_repository import CategoryRepository
 from app.repositories.checkout_repository import CheckoutRepository
 from app.repositories.stock_log_repository import StockLogRepository
 from app.repositories.system_config_repository import SystemConfigRepository
-from app.repositories.team_repository import TeamRepository
+from app.repositories.project_repository import ProjectRepository
 from app.repositories.token_repository import TokenRepository
 from app.repositories.user_repository import UserRepository
 from app.services.auth_service import AuthService
 from app.services.bitza_service import BitzaService
-from app.services.team_service import TeamService
+from app.services.project_service import ProjectService
 from app.services.user_service import UserService
 
 _bearer = HTTPBearer()
@@ -43,8 +43,8 @@ def get_category_repository(db: Session = Depends(get_db)) -> CategoryRepository
     return CategoryRepository(db)
 
 
-def get_team_repository(db: Session = Depends(get_db)) -> TeamRepository:
-    return TeamRepository(db)
+def get_project_repository(db: Session = Depends(get_db)) -> ProjectRepository:
+    return ProjectRepository(db)
 
 
 def get_bitza_repository(db: Session = Depends(get_db)) -> BitzaRepository:
@@ -95,21 +95,21 @@ def get_user_service(
 # Phase 2 (rebuilt) — Service providers
 # ---------------------------------------------------------------------------
 
-def get_team_service(
+def get_project_service(
     db: Session = Depends(get_db),
-    team_repo: TeamRepository = Depends(get_team_repository),
+    project_repo: ProjectRepository = Depends(get_project_repository),
     user_repo: UserRepository = Depends(get_user_repository),
     bitza_repo: BitzaRepository = Depends(get_bitza_repository),
-) -> TeamService:
-    return TeamService(
-        db=db, team_repo=team_repo, user_repo=user_repo, bitza_repo=bitza_repo
+) -> ProjectService:
+    return ProjectService(
+        db=db, project_repo=project_repo, user_repo=user_repo, bitza_repo=bitza_repo
     )
 
 
 def get_bitza_service(
     db: Session = Depends(get_db),
     bitza_repo: BitzaRepository = Depends(get_bitza_repository),
-    team_repo: TeamRepository = Depends(get_team_repository),
+    project_repo: ProjectRepository = Depends(get_project_repository),
     category_repo: CategoryRepository = Depends(get_category_repository),
     user_repo: UserRepository = Depends(get_user_repository),
     checkout_repo: CheckoutRepository = Depends(get_checkout_repository),
@@ -121,7 +121,7 @@ def get_bitza_service(
     return BitzaService(
         db=db,
         bitza_repo=bitza_repo,
-        team_repo=team_repo,
+        project_repo=project_repo,
         category_repo=category_repo,
         user_repo=user_repo,
         checkout_repo=checkout_repo,

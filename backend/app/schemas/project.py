@@ -5,20 +5,20 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 # ---------------------------------------------------------------------------
-# Team
+# Project
 # ---------------------------------------------------------------------------
 
-class TeamCreate(BaseModel):
+class ProjectCreate(BaseModel):
     name: str = Field(min_length=1, max_length=150)
     description: Optional[str] = None
 
 
-class TeamUpdate(BaseModel):
+class ProjectUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=150)
     description: Optional[str] = None
 
 
-class TeamRead(BaseModel):
+class ProjectRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: str
@@ -28,7 +28,7 @@ class TeamRead(BaseModel):
     created_at: datetime
 
 
-class TeamListRead(BaseModel):
+class ProjectListRead(BaseModel):
     """Compact form for pickers/dropdowns."""
     model_config = ConfigDict(from_attributes=True)
 
@@ -38,34 +38,34 @@ class TeamListRead(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# TeamMember
+# ProjectMember
 # ---------------------------------------------------------------------------
 
-class TeamMemberCreate(BaseModel):
+class ProjectMemberCreate(BaseModel):
     user_id: str
     is_primary: bool = False
 
 
-class TeamMemberSetPrimary(BaseModel):
+class ProjectMemberSetPrimary(BaseModel):
     is_primary: bool
 
 
-class TeamMemberRead(BaseModel):
+class ProjectMemberRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: str
-    team_id: str
+    project_id: str
     user_id: str
     user_display_name: str = ""   # populated by service
     is_primary: bool
     created_at: datetime
 
 
-class MyTeamMembershipRead(BaseModel):
-    """One row of the current user's own team memberships, for the '/me'
-    landing page — team name plus the is_primary flag so the frontend
-    can highlight it, without a client-side join against GET /teams/."""
+class MyProjectMembershipRead(BaseModel):
+    """One row of the current user's own project memberships, for the '/me'
+    landing page — project name plus the is_primary flag so the frontend
+    can highlight it, without a client-side join against GET /projects/."""
 
-    team_id: str
-    team_name: str
+    project_id: str
+    project_name: str
     is_primary: bool

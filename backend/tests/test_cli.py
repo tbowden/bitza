@@ -16,7 +16,7 @@ from app.core.security import hash_password
 from app.models.base import Base
 from app.models.bitza import Bitza, BitzaKind
 from app.models.system_config import SystemConfig
-from app.models.team import Team
+from app.models.project import Project
 from app.models.token import RefreshToken  # noqa: F401 — register table
 from app.models.user import User, UserRole
 
@@ -206,12 +206,12 @@ class TestCreateSuperuserExisting:
         db.close()
 
 
-def _seed_root(cli_db, team_name: str, root_name: str) -> Bitza:
+def _seed_root(cli_db, project_name: str, root_name: str) -> Bitza:
     db = cli_db()
-    team = Team(name=team_name)
-    db.add(team)
+    project = Project(name=project_name)
+    db.add(project)
     db.flush()
-    root = Bitza(name=root_name, kind=BitzaKind.fixed, parent_id=None, responsible_team_id=team.id)
+    root = Bitza(name=root_name, kind=BitzaKind.fixed, parent_id=None, responsible_project_id=project.id)
     db.add(root)
     db.flush()
     db.add(SystemConfig(root_bitza_id=root.id))
@@ -221,32 +221,32 @@ def _seed_root(cli_db, team_name: str, root_name: str) -> Bitza:
 
 
 class TestCreateRootNoExisting:
-    def test_creates_team_and_root_together(self, cli_db) -> None:
-        """No team, no root yet — offered to create the team inline, then the root."""
+    def test_creates_project_and_root_together(self, cli_db) -> None:
+        """No project, no root yet — offered to create the project inline, then the root."""
         from app.cli import app as cli_app
 
         result = runner.invoke(
             cli_app,
             ["create-root"],
-            # team name -> confirm create team (y) -> root name (accept default)
+            # project name -> confirm create project (y) -> root name (accept default)
             input="Acme Robotics\ny\n\n",
         )
         assert result.exit_code == 0
         assert "Root bitza created successfully" in result.stdout
 
         db = cli_db()
-        team = db.query(Team).filter(Team.name == "Acme Robotics").first()
-        assert team is not None
+        project = db.query(Project).filter(Project.name == "Acme Robotics").first()
+        assert project is not None
         root = db.query(Bitza).filter(Bitza.parent_id.is_(None)).first()
         assert root is not None
-        assert root.name == "Acme Robotics"  # accepted the default (team name)
-        assert root.responsible_team_id == team.id
+        assert root.name == "Acme Robotics"  # accepted the default (project name)
+        assert root.responsible_project_id == project.id
         config = db.query(SystemConfig).first()
         assert config is not None
         assert config.root_bitza_id == root.id
         db.close()
 
-    def test_declining_team_creation_makes_no_changes(self, cli_db) -> None:
+    def test_declining_project_creation_makes_no_changes(self, cli_db) -> None:
         from app.cli import app as cli_app
 
         result = runner.invoke(
@@ -258,15 +258,15 @@ class TestCreateRootNoExisting:
         assert "No changes made" in result.stdout
 
         db = cli_db()
-        assert db.query(Team).count() == 0
+        assert db.query(Project).count() == 0
         assert db.query(Bitza).count() == 0
         assert db.query(SystemConfig).count() == 0
         db.close()
 
-    def test_uses_existing_team_without_asking_to_create_it(self, cli_db) -> None:
-        """Team already exists — no 'create it?' confirmation should appear at all."""
+    def test_uses_existing_project_without_asking_to_create_it(self, cli_db) -> None:
+        """Project already exists — no 'create it?' confirmation should appear at all."""
         db = cli_db()
-        db.add(Team(name="Existing Club"))
+        db.add(Project(name="Existing Club"))
         db.commit()
         db.close()
 
@@ -275,7 +275,7 @@ class TestCreateRootNoExisting:
         result = runner.invoke(
             cli_app,
             ["create-root"],
-            # team name -> root name (explicit, not the default)
+            # project name -> root name (explicit, not the default)
             input="Existing Club\nThe Workshop\n",
         )
         assert result.exit_code == 0
@@ -283,7 +283,7 @@ class TestCreateRootNoExisting:
         assert "Root bitza created successfully" in result.stdout
 
         db = cli_db()
-        assert db.query(Team).count() == 1  # not duplicated
+        assert db.query(Project).count() == 1  # not duplicated
         root = db.query(Bitza).first()
         assert root.name == "The Workshop"
         db.close()

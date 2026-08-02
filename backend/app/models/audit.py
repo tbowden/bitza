@@ -14,8 +14,8 @@ def _utcnow() -> datetime:
 class AuditLog(Base):
     """
     Append-only event log — never updated or deleted. entity_type is a
-    free string ("bitza", "team", ...), so this table needed zero changes
-    for the Bitza/Team redesign; only its old home (app/models/asset.py)
+    free string ("bitza", "project", ...), so this table needed zero changes
+    for the Bitza/Project redesign; only its old home (app/models/asset.py)
     moved.
 
     This is deliberately NOT the same thing as StockLog/Checkout — those

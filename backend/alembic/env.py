@@ -17,7 +17,7 @@ from app.core.config import get_settings
 # autogenerate inspects the schema.
 from app.models.base import Base
 from app.models.token import RefreshToken  # noqa: F401
-from app.models.team import Team, TeamMember  # noqa: F401
+from app.models.project import Project, ProjectMember  # noqa: F401
 from app.models.category import Category  # noqa: F401
 from app.models.bitza import Bitza, BitzaImage, Checkout, StockLog  # noqa: F401
 from app.models.audit import AuditLog  # noqa: F401

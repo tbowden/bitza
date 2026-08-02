@@ -6,7 +6,7 @@ Covers:
 - kind-conditional create validation (fixed/mobile/stock)
 - parent/child hierarchy, direct-children listing, cycle prevention
 - retire/reactivate (open to any user) vs hard delete (admin/superuser only)
-- reassign-team with all three cascade scopes
+- reassign-project with all three cascade scopes
 - checkout/checkin state machine
 - stock adjustments (exact) and direct fuzzy_state edits
 - categories CRUD + delete-blocked-while-in-use
@@ -16,11 +16,11 @@ Covers:
 from fastapi.testclient import TestClient
 
 from app.models.bitza import Bitza
-from app.models.team import Team
+from app.models.project import Project
 from app.models.user import User
 
 BASE = "/api/v1/bitzas"
-BASE_TEAM = "/api/v1/teams"
+BASE_PROJECT = "/api/v1/projects"
 BASE_CAT = "/api/v1/categories"
 BASE_AUDIT = "/api/v1/audit"
 
@@ -53,13 +53,13 @@ def auth(token: str) -> dict:
     return {"Authorization": f"Bearer {token}"}
 
 
-def make_fixed(client, token, team_id, name="Workshop", parent_id=None):
+def make_fixed(client, token, project_id, name="Workshop", parent_id=None):
     resp = client.post(
         BASE + "/",
         json={
             "name": name,
             "kind": "fixed",
-            "responsible_team_id": team_id,
+            "responsible_project_id": project_id,
             "parent_id": parent_id or _root_id(client, token),
         },
         headers=auth(token),
@@ -68,13 +68,13 @@ def make_fixed(client, token, team_id, name="Workshop", parent_id=None):
     return resp.json()
 
 
-def make_mobile(client, token, team_id, name="Multimeter", parent_id=None):
+def make_mobile(client, token, project_id, name="Multimeter", parent_id=None):
     resp = client.post(
         BASE + "/",
         json={
             "name": name,
             "kind": "mobile",
-            "responsible_team_id": team_id,
+            "responsible_project_id": project_id,
             "parent_id": parent_id or _root_id(client, token),
         },
         headers=auth(token),
@@ -83,13 +83,13 @@ def make_mobile(client, token, team_id, name="Multimeter", parent_id=None):
     return resp.json()
 
 
-def make_exact_stock(client, token, team_id, name="Resistors", qty=50, parent_id=None):
+def make_exact_stock(client, token, project_id, name="Resistors", qty=50, parent_id=None):
     resp = client.post(
         BASE + "/",
         json={
             "name": name,
             "kind": "stock",
-            "responsible_team_id": team_id,
+            "responsible_project_id": project_id,
             "parent_id": parent_id or _root_id(client, token),
             "stock_mode": "exact",
             "quantity": qty,
@@ -105,33 +105,33 @@ def make_exact_stock(client, token, team_id, name="Resistors", qty=50, parent_id
 # =========================================================================
 
 class TestCreateValidation:
-    def test_create_fixed(self, client: TestClient, user_token: str, default_team: Team) -> None:
-        b = make_fixed(client, user_token, default_team.id)
+    def test_create_fixed(self, client: TestClient, user_token: str, default_project: Project) -> None:
+        b = make_fixed(client, user_token, default_project.id)
         assert b["kind"] == "fixed"
-        assert b["responsible_team_id"] == default_team.id
+        assert b["responsible_project_id"] == default_project.id
         assert b["status"] == "active"
 
-    def test_create_mobile(self, client: TestClient, user_token: str, default_team: Team) -> None:
-        b = make_mobile(client, user_token, default_team.id)
+    def test_create_mobile(self, client: TestClient, user_token: str, default_project: Project) -> None:
+        b = make_mobile(client, user_token, default_project.id)
         assert b["kind"] == "mobile"
         assert b["is_checked_out"] is False
 
     def test_create_exact_stock(
-        self, client: TestClient, user_token: str, default_team: Team
+        self, client: TestClient, user_token: str, default_project: Project
     ) -> None:
-        b = make_exact_stock(client, user_token, default_team.id, qty=20)
+        b = make_exact_stock(client, user_token, default_project.id, qty=20)
         assert b["stock_mode"] == "exact"
         assert b["quantity"] == 20
 
     def test_create_fuzzy_stock(
-        self, client: TestClient, user_token: str, default_team: Team
+        self, client: TestClient, user_token: str, default_project: Project
     ) -> None:
         resp = client.post(
             BASE + "/",
             json={
                 "name": "Heatshrink",
                 "kind": "stock",
-                "responsible_team_id": default_team.id,
+                "responsible_project_id": default_project.id,
                 "parent_id": _root_id(client, user_token),
                 "stock_mode": "fuzzy",
                 "fuzzy_state": "plentiful",
@@ -141,39 +141,39 @@ class TestCreateValidation:
         assert resp.status_code == 201, resp.text
         assert resp.json()["fuzzy_state"] == "plentiful"
 
-    def test_missing_responsible_team_rejected(
+    def test_missing_responsible_project_rejected(
         self, client: TestClient, user_token: str
     ) -> None:
         resp = client.post(
             BASE + "/",
-            json={"name": "No Team", "kind": "fixed"},
+            json={"name": "No Project", "kind": "fixed"},
             headers=auth(user_token),
         )
         assert resp.status_code == 422
 
     def test_stock_without_stock_mode_rejected(
-        self, client: TestClient, user_token: str, default_team: Team
+        self, client: TestClient, user_token: str, default_project: Project
     ) -> None:
         resp = client.post(
             BASE + "/",
             json={
                 "name": "Bad Stock",
                 "kind": "stock",
-                "responsible_team_id": default_team.id,
+                "responsible_project_id": default_project.id,
             },
             headers=auth(user_token),
         )
         assert resp.status_code == 422
 
     def test_exact_stock_requires_quantity(
-        self, client: TestClient, user_token: str, default_team: Team
+        self, client: TestClient, user_token: str, default_project: Project
     ) -> None:
         resp = client.post(
             BASE + "/",
             json={
                 "name": "Bad Exact",
                 "kind": "stock",
-                "responsible_team_id": default_team.id,
+                "responsible_project_id": default_project.id,
                 "stock_mode": "exact",
             },
             headers=auth(user_token),
@@ -181,27 +181,27 @@ class TestCreateValidation:
         assert resp.status_code == 422
 
     def test_fixed_kind_rejects_stock_fields(
-        self, client: TestClient, user_token: str, default_team: Team
+        self, client: TestClient, user_token: str, default_project: Project
     ) -> None:
         resp = client.post(
             BASE + "/",
             json={
                 "name": "Bad Fixed",
                 "kind": "fixed",
-                "responsible_team_id": default_team.id,
+                "responsible_project_id": default_project.id,
                 "quantity": 5,
             },
             headers=auth(user_token),
         )
         assert resp.status_code == 422
 
-    def test_nonexistent_team_rejected(self, client: TestClient, user_token: str, root_bitza) -> None:
+    def test_nonexistent_project_rejected(self, client: TestClient, user_token: str, root_bitza) -> None:
         resp = client.post(
             BASE + "/",
             json={
-                "name": "Ghost Team",
+                "name": "Ghost Project",
                 "kind": "fixed",
-                "responsible_team_id": "00000000-0000-0000-0000-000000000000",
+                "responsible_project_id": "00000000-0000-0000-0000-000000000000",
                 "parent_id": root_bitza.id,
             },
             headers=auth(user_token),
@@ -209,9 +209,9 @@ class TestCreateValidation:
         assert resp.status_code == 404
 
     def test_purchased_by_defaults_to_creator(
-        self, client: TestClient, user_token: str, default_team: Team, normal_user: User
+        self, client: TestClient, user_token: str, default_project: Project, normal_user: User
     ) -> None:
-        b = make_mobile(client, user_token, default_team.id)
+        b = make_mobile(client, user_token, default_project.id)
         assert b["purchased_by_user_id"] == normal_user.id
 
 
@@ -221,11 +221,11 @@ class TestCreateValidation:
 
 class TestHierarchy:
     def test_list_direct_children(
-        self, client: TestClient, user_token: str, default_team: Team
+        self, client: TestClient, user_token: str, default_project: Project
     ) -> None:
-        parent = make_fixed(client, user_token, default_team.id, name="Shelf 4")
-        make_mobile(client, user_token, default_team.id, name="Torque Wrench", parent_id=parent["id"])
-        make_mobile(client, user_token, default_team.id, name="Multimeter 2", parent_id=parent["id"])
+        parent = make_fixed(client, user_token, default_project.id, name="Shelf 4")
+        make_mobile(client, user_token, default_project.id, name="Torque Wrench", parent_id=parent["id"])
+        make_mobile(client, user_token, default_project.id, name="Multimeter 2", parent_id=parent["id"])
 
         resp = client.get(f"{BASE}/?parent_id={parent['id']}", headers=auth(user_token))
         assert resp.status_code == 200
@@ -233,12 +233,12 @@ class TestHierarchy:
         assert names == {"Torque Wrench", "Multimeter 2"}
 
     def test_moving_container_does_not_touch_children(
-        self, client: TestClient, user_token: str, default_team: Team
+        self, client: TestClient, user_token: str, default_project: Project
     ) -> None:
-        room_a = make_fixed(client, user_token, default_team.id, name="Study")
-        room_b = make_fixed(client, user_token, default_team.id, name="James Room")
-        toolbox = make_fixed(client, user_token, default_team.id, name="Toolbox 3", parent_id=room_a["id"])
-        tool = make_mobile(client, user_token, default_team.id, name="Screwdriver", parent_id=toolbox["id"])
+        room_a = make_fixed(client, user_token, default_project.id, name="Study")
+        room_b = make_fixed(client, user_token, default_project.id, name="James Room")
+        toolbox = make_fixed(client, user_token, default_project.id, name="Toolbox 3", parent_id=room_a["id"])
+        tool = make_mobile(client, user_token, default_project.id, name="Screwdriver", parent_id=toolbox["id"])
 
         resp = client.patch(
             f"{BASE}/{toolbox['id']}", json={"parent_id": room_b["id"]}, headers=auth(user_token)
@@ -252,10 +252,10 @@ class TestHierarchy:
         assert tool_resp.json()["parent_id"] == toolbox["id"]
 
     def test_cannot_move_bitza_under_its_own_descendant(
-        self, client: TestClient, user_token: str, default_team: Team
+        self, client: TestClient, user_token: str, default_project: Project
     ) -> None:
-        parent = make_fixed(client, user_token, default_team.id, name="Cabinet")
-        child = make_fixed(client, user_token, default_team.id, name="Drawer", parent_id=parent["id"])
+        parent = make_fixed(client, user_token, default_project.id, name="Cabinet")
+        child = make_fixed(client, user_token, default_project.id, name="Drawer", parent_id=parent["id"])
 
         resp = client.patch(
             f"{BASE}/{parent['id']}", json={"parent_id": child["id"]}, headers=auth(user_token)
@@ -263,25 +263,25 @@ class TestHierarchy:
         assert resp.status_code == 409
 
     def test_delete_blocked_with_children(
-        self, client: TestClient, admin_token: str, user_token: str, default_team: Team
+        self, client: TestClient, admin_token: str, user_token: str, default_project: Project
     ) -> None:
-        parent = make_fixed(client, user_token, default_team.id, name="Non-empty")
-        make_mobile(client, user_token, default_team.id, name="Inside", parent_id=parent["id"])
+        parent = make_fixed(client, user_token, default_project.id, name="Non-empty")
+        make_mobile(client, user_token, default_project.id, name="Inside", parent_id=parent["id"])
 
         resp = client.delete(f"{BASE}/{parent['id']}", headers=auth(admin_token))
         assert resp.status_code == 409
 
     def test_cannot_create_under_stock_parent(
-        self, client: TestClient, user_token: str, default_team: Team
+        self, client: TestClient, user_token: str, default_project: Project
     ) -> None:
         """Stock bitzas are quantity-only leaves — nothing can be created underneath one."""
-        stock = make_exact_stock(client, user_token, default_team.id, qty=10)
+        stock = make_exact_stock(client, user_token, default_project.id, qty=10)
         resp = client.post(
             BASE + "/",
             json={
                 "name": "Should Not Fit",
                 "kind": "fixed",
-                "responsible_team_id": default_team.id,
+                "responsible_project_id": default_project.id,
                 "parent_id": stock["id"],
             },
             headers=auth(user_token),
@@ -289,10 +289,10 @@ class TestHierarchy:
         assert resp.status_code == 409
 
     def test_cannot_move_bitza_under_stock_parent(
-        self, client: TestClient, user_token: str, default_team: Team
+        self, client: TestClient, user_token: str, default_project: Project
     ) -> None:
-        stock = make_exact_stock(client, user_token, default_team.id, qty=10)
-        shelf = make_fixed(client, user_token, default_team.id, name="Loose Shelf")
+        stock = make_exact_stock(client, user_token, default_project.id, qty=10)
+        shelf = make_fixed(client, user_token, default_project.id, name="Loose Shelf")
         resp = client.patch(
             f"{BASE}/{shelf['id']}", json={"parent_id": stock["id"]}, headers=auth(user_token)
         )
@@ -306,15 +306,15 @@ class TestAncestors:
     GET /bitzas/{id} calls with one."""
 
     def test_ancestors_ordered_nearest_parent_first(
-        self, client: TestClient, user_token: str, default_team: Team
+        self, client: TestClient, user_token: str, default_project: Project
     ) -> None:
         root_id = _root_id(client, user_token)
-        grandparent = make_fixed(client, user_token, default_team.id, name="Garage")
+        grandparent = make_fixed(client, user_token, default_project.id, name="Garage")
         parent = make_fixed(
-            client, user_token, default_team.id, name="Toolbox", parent_id=grandparent["id"]
+            client, user_token, default_project.id, name="Toolbox", parent_id=grandparent["id"]
         )
         child = make_mobile(
-            client, user_token, default_team.id, name="Screwdriver", parent_id=parent["id"]
+            client, user_token, default_project.id, name="Screwdriver", parent_id=parent["id"]
         )
 
         resp = client.get(f"{BASE}/{child['id']}/ancestors", headers=auth(user_token))
@@ -339,7 +339,7 @@ class TestAncestors:
 # =========================================================================
 
 class TestRootBitza:
-    def test_create_without_parent_rejected(self, client: TestClient, user_token: str, default_team: Team) -> None:
+    def test_create_without_parent_rejected(self, client: TestClient, user_token: str, default_project: Project) -> None:
         """
         parent_id is required on BitzaCreate — the ordinary API can never
         produce a second root-level bitza. Rejected by Pydantic itself,
@@ -347,7 +347,7 @@ class TestRootBitza:
         """
         resp = client.post(
             BASE + "/",
-            json={"name": "Another Root?", "kind": "fixed", "responsible_team_id": default_team.id},
+            json={"name": "Another Root?", "kind": "fixed", "responsible_project_id": default_project.id},
             headers=auth(user_token),
         )
         assert resp.status_code == 422
@@ -360,22 +360,22 @@ class TestRootBitza:
         assert resp.json()["is_root"] is True
 
     def test_ordinary_bitza_flagged_is_root_false(
-        self, client: TestClient, user_token: str, default_team: Team
+        self, client: TestClient, user_token: str, default_project: Project
     ) -> None:
-        ordinary = make_fixed(client, user_token, default_team.id, name="Ordinary Shelf")
+        ordinary = make_fixed(client, user_token, default_project.id, name="Ordinary Shelf")
         resp = client.get(f"{BASE}/{ordinary['id']}", headers=auth(user_token))
         assert resp.status_code == 200
         assert resp.json()["is_root"] is False
 
     def test_root_only_listing_returns_exactly_the_root(
-        self, client: TestClient, user_token: str, root_bitza: Bitza, default_team: Team
+        self, client: TestClient, user_token: str, root_bitza: Bitza, default_project: Project
     ) -> None:
         """
         Even after ordinary bitzas exist elsewhere in the tree, root_only
         listing returns exactly the one root — there's no longer any way
         for a second root-level item to sneak in via the ordinary API.
         """
-        make_fixed(client, user_token, default_team.id, name="Somewhere Under Root")
+        make_fixed(client, user_token, default_project.id, name="Somewhere Under Root")
         resp = client.get(f"{BASE}/?root_only=true", headers=auth(user_token))
         assert resp.status_code == 200
         ids = [b["id"] for b in resp.json()]
@@ -402,7 +402,7 @@ class TestRootBitza:
         assert resp.status_code == 409
 
     def test_root_parent_id_change_rejected_for_non_admin(
-        self, client: TestClient, user_token: str, root_bitza: Bitza, default_team: Team
+        self, client: TestClient, user_token: str, root_bitza: Bitza, default_project: Project
     ) -> None:
         """
         A non-admin touching the root at all is rejected on the role
@@ -410,7 +410,7 @@ class TestRootBitza:
         an admin gets for the identical payload (see the admin case
         below) — role wins when both problems are present at once.
         """
-        somewhere = make_fixed(client, user_token, default_team.id, name="Somewhere")
+        somewhere = make_fixed(client, user_token, default_project.id, name="Somewhere")
         resp = client.patch(
             f"{BASE}/{root_bitza.id}", json={"parent_id": somewhere["id"]}, headers=auth(user_token)
         )
@@ -422,12 +422,12 @@ class TestRootBitza:
         admin_token: str,
         user_token: str,
         root_bitza: Bitza,
-        default_team: Team,
+        default_project: Project,
     ) -> None:
         """The root can never be reparented — it's the tree's permanent
         anchor — even for an admin, who clears the role check but is
         still rejected for the field itself."""
-        somewhere = make_fixed(client, user_token, default_team.id, name="Somewhere")
+        somewhere = make_fixed(client, user_token, default_project.id, name="Somewhere")
         resp = client.patch(
             f"{BASE}/{root_bitza.id}", json={"parent_id": somewhere["id"]}, headers=auth(admin_token)
         )
@@ -465,19 +465,19 @@ class TestRootBitza:
         )
         assert resp.status_code == 409
 
-    def test_root_reassign_team_rejected(
-        self, client: TestClient, admin_token: str, root_bitza: Bitza, default_team: Team
+    def test_root_reassign_project_rejected(
+        self, client: TestClient, admin_token: str, root_bitza: Bitza, default_project: Project
     ) -> None:
         """
-        reassign-team changes responsible_team_id directly and doesn't
+        reassign-project changes responsible_project_id directly and doesn't
         route through update_bitza's guard at all — checked separately
         so this endpoint can't undo the PATCH lockdown above. Unconditional,
-        like delete/retire/move, since the root's team is never
+        like delete/retire/move, since the root's project is never
         legitimately editable — not even for an admin.
         """
         resp = client.post(
-            f"{BASE}/{root_bitza.id}/reassign-team",
-            json={"team_id": default_team.id, "cascade_scope": "none"},
+            f"{BASE}/{root_bitza.id}/reassign-project",
+            json={"project_id": default_project.id, "cascade_scope": "none"},
             headers=auth(admin_token),
         )
         assert resp.status_code == 409
@@ -489,23 +489,23 @@ class TestRootBitza:
 
 class TestDeleteVsRetire:
     def test_normal_user_cannot_hard_delete(
-        self, client: TestClient, user_token: str, default_team: Team
+        self, client: TestClient, user_token: str, default_project: Project
     ) -> None:
-        b = make_mobile(client, user_token, default_team.id)
+        b = make_mobile(client, user_token, default_project.id)
         resp = client.delete(f"{BASE}/{b['id']}", headers=auth(user_token))
         assert resp.status_code == 403
 
     def test_admin_can_hard_delete(
-        self, client: TestClient, admin_token: str, user_token: str, default_team: Team
+        self, client: TestClient, admin_token: str, user_token: str, default_project: Project
     ) -> None:
-        b = make_mobile(client, user_token, default_team.id)
+        b = make_mobile(client, user_token, default_project.id)
         resp = client.delete(f"{BASE}/{b['id']}", headers=auth(admin_token))
         assert resp.status_code == 204
 
     def test_any_user_can_retire(
-        self, client: TestClient, user_token: str, default_team: Team
+        self, client: TestClient, user_token: str, default_project: Project
     ) -> None:
-        b = make_mobile(client, user_token, default_team.id)
+        b = make_mobile(client, user_token, default_project.id)
         resp = client.post(
             f"{BASE}/{b['id']}/retire",
             json={"reason": "lost"},
@@ -516,9 +516,9 @@ class TestDeleteVsRetire:
         assert resp.json()["retired_reason"] == "lost"
 
     def test_reactivate_clears_retired_fields(
-        self, client: TestClient, user_token: str, default_team: Team
+        self, client: TestClient, user_token: str, default_project: Project
     ) -> None:
-        b = make_mobile(client, user_token, default_team.id)
+        b = make_mobile(client, user_token, default_project.id)
         client.post(
             f"{BASE}/{b['id']}/retire",
             json={"reason": "broken", "note": "dropped it"},
@@ -530,9 +530,9 @@ class TestDeleteVsRetire:
         assert resp.json()["retired_reason"] is None
 
     def test_retired_items_filterable(
-        self, client: TestClient, user_token: str, default_team: Team
+        self, client: TestClient, user_token: str, default_project: Project
     ) -> None:
-        b = make_mobile(client, user_token, default_team.id, name="Broken Drill")
+        b = make_mobile(client, user_token, default_project.id, name="Broken Drill")
         client.post(
             f"{BASE}/{b['id']}/retire",
             json={"reason": "broken"},
@@ -544,43 +544,43 @@ class TestDeleteVsRetire:
 
 
 # =========================================================================
-# Team reassignment cascade
+# Project reassignment cascade
 # =========================================================================
 
-class TestReassignTeam:
+class TestReassignProject:
     def test_scope_none_only_changes_this_row(
-        self, client: TestClient, user_token: str, default_team: Team
+        self, client: TestClient, user_token: str, default_project: Project
     ) -> None:
-        other_team = client.post(
-            BASE_TEAM + "/", json={"name": "Battery"}, headers=auth(user_token)
+        other_project = client.post(
+            BASE_PROJECT + "/", json={"name": "Battery"}, headers=auth(user_token)
         ).json()
-        cupboard = make_fixed(client, user_token, default_team.id, name="Brown Cupboard")
-        shelf = make_fixed(client, user_token, default_team.id, name="Shelf 3", parent_id=cupboard["id"])
+        cupboard = make_fixed(client, user_token, default_project.id, name="Brown Cupboard")
+        shelf = make_fixed(client, user_token, default_project.id, name="Shelf 3", parent_id=cupboard["id"])
 
         resp = client.post(
-            f"{BASE}/{cupboard['id']}/reassign-team",
-            json={"team_id": other_team["id"], "cascade_scope": "none"},
+            f"{BASE}/{cupboard['id']}/reassign-project",
+            json={"project_id": other_project["id"], "cascade_scope": "none"},
             headers=auth(user_token),
         )
         assert resp.status_code == 200
         assert resp.json()["updated_count"] == 1
 
         shelf_after = client.get(f"{BASE}/{shelf['id']}", headers=auth(user_token)).json()
-        assert shelf_after["responsible_team_id"] == default_team.id
+        assert shelf_after["responsible_project_id"] == default_project.id
 
     def test_scope_direct_children(
-        self, client: TestClient, user_token: str, default_team: Team
+        self, client: TestClient, user_token: str, default_project: Project
     ) -> None:
-        other_team = client.post(
-            BASE_TEAM + "/", json={"name": "Suspension"}, headers=auth(user_token)
+        other_project = client.post(
+            BASE_PROJECT + "/", json={"name": "Suspension"}, headers=auth(user_token)
         ).json()
-        cupboard = make_fixed(client, user_token, default_team.id, name="Cupboard2")
-        shelf = make_fixed(client, user_token, default_team.id, name="Shelf X", parent_id=cupboard["id"])
-        toolbox = make_fixed(client, user_token, default_team.id, name="Toolbox Y", parent_id=shelf["id"])
+        cupboard = make_fixed(client, user_token, default_project.id, name="Cupboard2")
+        shelf = make_fixed(client, user_token, default_project.id, name="Shelf X", parent_id=cupboard["id"])
+        toolbox = make_fixed(client, user_token, default_project.id, name="Toolbox Y", parent_id=shelf["id"])
 
         resp = client.post(
-            f"{BASE}/{cupboard['id']}/reassign-team",
-            json={"team_id": other_team["id"], "cascade_scope": "direct_children"},
+            f"{BASE}/{cupboard['id']}/reassign-project",
+            json={"project_id": other_project["id"], "cascade_scope": "direct_children"},
             headers=auth(user_token),
         )
         assert resp.status_code == 200
@@ -588,37 +588,37 @@ class TestReassignTeam:
 
         shelf_after = client.get(f"{BASE}/{shelf['id']}", headers=auth(user_token)).json()
         toolbox_after = client.get(f"{BASE}/{toolbox['id']}", headers=auth(user_token)).json()
-        assert shelf_after["responsible_team_id"] == other_team["id"]
-        assert toolbox_after["responsible_team_id"] == default_team.id
+        assert shelf_after["responsible_project_id"] == other_project["id"]
+        assert toolbox_after["responsible_project_id"] == default_project.id
 
     def test_scope_all_descendants(
-        self, client: TestClient, user_token: str, default_team: Team
+        self, client: TestClient, user_token: str, default_project: Project
     ) -> None:
-        other_team = client.post(
-            BASE_TEAM + "/", json={"name": "Powertrain"}, headers=auth(user_token)
+        other_project = client.post(
+            BASE_PROJECT + "/", json={"name": "Powertrain"}, headers=auth(user_token)
         ).json()
-        toolbox = make_fixed(client, user_token, default_team.id, name="Toolbox Z")
-        drawer = make_fixed(client, user_token, default_team.id, name="Drawer Z", parent_id=toolbox["id"])
-        tool = make_mobile(client, user_token, default_team.id, name="Pliers", parent_id=drawer["id"])
+        toolbox = make_fixed(client, user_token, default_project.id, name="Toolbox Z")
+        drawer = make_fixed(client, user_token, default_project.id, name="Drawer Z", parent_id=toolbox["id"])
+        tool = make_mobile(client, user_token, default_project.id, name="Pliers", parent_id=drawer["id"])
 
         resp = client.post(
-            f"{BASE}/{toolbox['id']}/reassign-team",
-            json={"team_id": other_team["id"], "cascade_scope": "all_descendants"},
+            f"{BASE}/{toolbox['id']}/reassign-project",
+            json={"project_id": other_project["id"], "cascade_scope": "all_descendants"},
             headers=auth(user_token),
         )
         assert resp.status_code == 200
         assert resp.json()["updated_count"] == 3
 
         tool_after = client.get(f"{BASE}/{tool['id']}", headers=auth(user_token)).json()
-        assert tool_after["responsible_team_id"] == other_team["id"]
+        assert tool_after["responsible_project_id"] == other_project["id"]
 
     def test_cascade_scope_is_required(
-        self, client: TestClient, user_token: str, default_team: Team
+        self, client: TestClient, user_token: str, default_project: Project
     ) -> None:
-        b = make_fixed(client, user_token, default_team.id)
+        b = make_fixed(client, user_token, default_project.id)
         resp = client.post(
-            f"{BASE}/{b['id']}/reassign-team",
-            json={"team_id": default_team.id},
+            f"{BASE}/{b['id']}/reassign-project",
+            json={"project_id": default_project.id},
             headers=auth(user_token),
         )
         assert resp.status_code == 422
@@ -630,9 +630,9 @@ class TestReassignTeam:
 
 class TestCheckout:
     def test_checkout_and_checkin(
-        self, client: TestClient, user_token: str, default_team: Team
+        self, client: TestClient, user_token: str, default_project: Project
     ) -> None:
-        tool = make_mobile(client, user_token, default_team.id)
+        tool = make_mobile(client, user_token, default_project.id)
         resp = client.post(
             f"{BASE}/{tool['id']}/checkout", json={}, headers=auth(user_token)
         )
@@ -652,9 +652,9 @@ class TestCheckout:
         assert after_checkin["is_checked_out"] is False
 
     def test_cannot_checkout_already_checked_out(
-        self, client: TestClient, user_token: str, second_user_token: str, default_team: Team
+        self, client: TestClient, user_token: str, second_user_token: str, default_project: Project
     ) -> None:
-        tool = make_mobile(client, user_token, default_team.id)
+        tool = make_mobile(client, user_token, default_project.id)
         client.post(f"{BASE}/{tool['id']}/checkout", json={}, headers=auth(user_token))
         resp = client.post(
             f"{BASE}/{tool['id']}/checkout", json={}, headers=auth(second_user_token)
@@ -662,48 +662,48 @@ class TestCheckout:
         assert resp.status_code == 409
 
     def test_cannot_checkin_when_not_checked_out(
-        self, client: TestClient, user_token: str, default_team: Team
+        self, client: TestClient, user_token: str, default_project: Project
     ) -> None:
-        tool = make_mobile(client, user_token, default_team.id)
+        tool = make_mobile(client, user_token, default_project.id)
         resp = client.post(f"{BASE}/{tool['id']}/checkin", json={}, headers=auth(user_token))
         assert resp.status_code == 409
 
     def test_cannot_checkout_fixed_bitza(
-        self, client: TestClient, user_token: str, default_team: Team
+        self, client: TestClient, user_token: str, default_project: Project
     ) -> None:
-        room = make_fixed(client, user_token, default_team.id)
+        room = make_fixed(client, user_token, default_project.id)
         resp = client.post(f"{BASE}/{room['id']}/checkout", json={}, headers=auth(user_token))
         assert resp.status_code == 409
 
-    def test_team_context_snapshot_survives_membership_change(
-        self, client: TestClient, user_token: str, default_team: Team, normal_user: User
+    def test_project_context_snapshot_survives_membership_change(
+        self, client: TestClient, user_token: str, default_project: Project, normal_user: User
     ) -> None:
-        team = client.post(
-            BASE_TEAM + "/", json={"name": "Snapshot Team"}, headers=auth(user_token)
+        project = client.post(
+            BASE_PROJECT + "/", json={"name": "Snapshot Project"}, headers=auth(user_token)
         ).json()
         client.post(
-            f"{BASE_TEAM}/{team['id']}/members",
+            f"{BASE_PROJECT}/{project['id']}/members",
             json={"user_id": normal_user.id, "is_primary": True},
             headers=auth(user_token),
         )
-        tool = make_mobile(client, user_token, default_team.id)
+        tool = make_mobile(client, user_token, default_project.id)
         checkout = client.post(
             f"{BASE}/{tool['id']}/checkout", json={}, headers=auth(user_token)
         ).json()
-        assert checkout["team_context"] == "Snapshot Team"
+        assert checkout["project_context"] == "Snapshot Project"
 
         # Now remove the membership entirely — the checkout record must
-        # be untouched, since team_context was a snapshot, not a live FK.
+        # be untouched, since project_context was a snapshot, not a live FK.
         client.delete(
-            f"{BASE_TEAM}/{team['id']}/members/{normal_user.id}", headers=auth(user_token)
+            f"{BASE_PROJECT}/{project['id']}/members/{normal_user.id}", headers=auth(user_token)
         )
         history = client.get(f"{BASE}/{tool['id']}/checkouts", headers=auth(user_token)).json()
-        assert history[0]["team_context"] == "Snapshot Team"
+        assert history[0]["project_context"] == "Snapshot Project"
 
     def test_checkout_history_lists_newest_first(
-        self, client: TestClient, user_token: str, default_team: Team
+        self, client: TestClient, user_token: str, default_project: Project
     ) -> None:
-        tool = make_mobile(client, user_token, default_team.id)
+        tool = make_mobile(client, user_token, default_project.id)
         client.post(f"{BASE}/{tool['id']}/checkout", json={}, headers=auth(user_token))
         client.post(f"{BASE}/{tool['id']}/checkin", json={}, headers=auth(user_token))
         client.post(f"{BASE}/{tool['id']}/checkout", json={}, headers=auth(user_token))
@@ -720,9 +720,9 @@ class TestCheckout:
 
 class TestMyCheckouts:
     def test_list_my_checkouts_returns_open_only(
-        self, client: TestClient, user_token: str, default_team: Team
+        self, client: TestClient, user_token: str, default_project: Project
     ) -> None:
-        tool = make_mobile(client, user_token, default_team.id, name="Drill")
+        tool = make_mobile(client, user_token, default_project.id, name="Drill")
         client.post(f"{BASE}/{tool['id']}/checkout", json={}, headers=auth(user_token))
 
         resp = client.get("/api/v1/checkouts/mine", headers=auth(user_token))
@@ -732,9 +732,9 @@ class TestMyCheckouts:
         assert resp.json()[0]["bitza_kind"] == "mobile"
 
     def test_checked_in_items_excluded(
-        self, client: TestClient, user_token: str, default_team: Team
+        self, client: TestClient, user_token: str, default_project: Project
     ) -> None:
-        tool = make_mobile(client, user_token, default_team.id)
+        tool = make_mobile(client, user_token, default_project.id)
         client.post(f"{BASE}/{tool['id']}/checkout", json={}, headers=auth(user_token))
         client.post(f"{BASE}/{tool['id']}/checkin", json={}, headers=auth(user_token))
 
@@ -747,9 +747,9 @@ class TestMyCheckouts:
         client: TestClient,
         user_token: str,
         second_user_token: str,
-        default_team: Team,
+        default_project: Project,
     ) -> None:
-        tool = make_mobile(client, user_token, default_team.id)
+        tool = make_mobile(client, user_token, default_project.id)
         client.post(f"{BASE}/{tool['id']}/checkout", json={}, headers=auth(user_token))
 
         resp = client.get("/api/v1/checkouts/mine", headers=auth(second_user_token))
@@ -757,15 +757,15 @@ class TestMyCheckouts:
         assert resp.json() == []
 
     def test_spans_whole_tree_not_one_subtree(
-        self, client: TestClient, user_token: str, default_team: Team
+        self, client: TestClient, user_token: str, default_project: Project
     ) -> None:
         """A user's checked-out items can live anywhere in the hierarchy —
         this must not be scoped to a single parent's subtree."""
-        room = make_fixed(client, user_token, default_team.id, name="Garage")
+        room = make_fixed(client, user_token, default_project.id, name="Garage")
         tool_a = make_mobile(
-            client, user_token, default_team.id, name="Multimeter", parent_id=room["id"]
+            client, user_token, default_project.id, name="Multimeter", parent_id=room["id"]
         )
-        tool_b = make_mobile(client, user_token, default_team.id, name="Drill")
+        tool_b = make_mobile(client, user_token, default_project.id, name="Drill")
         client.post(f"{BASE}/{tool_a['id']}/checkout", json={}, headers=auth(user_token))
         client.post(f"{BASE}/{tool_b['id']}/checkout", json={}, headers=auth(user_token))
 
@@ -780,8 +780,8 @@ class TestMyCheckouts:
 # =========================================================================
 
 class TestStockAdjustments:
-    def test_add_stock(self, client: TestClient, user_token: str, default_team: Team) -> None:
-        stock = make_exact_stock(client, user_token, default_team.id, qty=10)
+    def test_add_stock(self, client: TestClient, user_token: str, default_project: Project) -> None:
+        stock = make_exact_stock(client, user_token, default_project.id, qty=10)
         resp = client.post(
             f"{BASE}/{stock['id']}/stock-adjustments",
             json={"delta": 5, "note": "Restocked"},
@@ -794,9 +794,9 @@ class TestStockAdjustments:
         assert after["quantity"] == 15
 
     def test_negative_result_rejected(
-        self, client: TestClient, user_token: str, default_team: Team
+        self, client: TestClient, user_token: str, default_project: Project
     ) -> None:
-        stock = make_exact_stock(client, user_token, default_team.id, qty=3)
+        stock = make_exact_stock(client, user_token, default_project.id, qty=3)
         resp = client.post(
             f"{BASE}/{stock['id']}/stock-adjustments",
             json={"delta": -10},
@@ -805,9 +805,9 @@ class TestStockAdjustments:
         assert resp.status_code == 422
 
     def test_adjustment_blocked_on_non_stock(
-        self, client: TestClient, user_token: str, default_team: Team
+        self, client: TestClient, user_token: str, default_project: Project
     ) -> None:
-        tool = make_mobile(client, user_token, default_team.id)
+        tool = make_mobile(client, user_token, default_project.id)
         resp = client.post(
             f"{BASE}/{tool['id']}/stock-adjustments",
             json={"delta": 1},
@@ -816,14 +816,14 @@ class TestStockAdjustments:
         assert resp.status_code == 409
 
     def test_fuzzy_state_edited_directly_no_log(
-        self, client: TestClient, user_token: str, default_team: Team
+        self, client: TestClient, user_token: str, default_project: Project
     ) -> None:
         resp = client.post(
             BASE + "/",
             json={
                 "name": "Zip Ties",
                 "kind": "stock",
-                "responsible_team_id": default_team.id,
+                "responsible_project_id": default_project.id,
                 "parent_id": _root_id(client, user_token),
                 "stock_mode": "fuzzy",
                 "fuzzy_state": "plentiful",
@@ -838,22 +838,22 @@ class TestStockAdjustments:
         assert patch_resp.json()["fuzzy_state"] == "low"
 
     def test_fuzzy_state_rejected_on_exact_mode_stock(
-        self, client: TestClient, user_token: str, default_team: Team
+        self, client: TestClient, user_token: str, default_project: Project
     ) -> None:
         """Guards against exactly the gap the stock_mode-inert-during-edit
         frontend bug could otherwise exploit: flipping the (now read-only
         on edit) stock tracking dropdown used to let fuzzy_state slip
         into the update payload for a bitza that's actually exact-mode."""
-        stock = make_exact_stock(client, user_token, default_team.id, qty=5)
+        stock = make_exact_stock(client, user_token, default_project.id, qty=5)
         patch_resp = client.patch(
             f"{BASE}/{stock['id']}", json={"fuzzy_state": "low"}, headers=auth(user_token)
         )
         assert patch_resp.status_code == 409
 
     def test_fuzzy_state_rejected_on_non_stock(
-        self, client: TestClient, user_token: str, default_team: Team
+        self, client: TestClient, user_token: str, default_project: Project
     ) -> None:
-        tool = make_mobile(client, user_token, default_team.id)
+        tool = make_mobile(client, user_token, default_project.id)
         patch_resp = client.patch(
             f"{BASE}/{tool['id']}", json={"fuzzy_state": "low"}, headers=auth(user_token)
         )
@@ -869,17 +869,17 @@ class TestStockAdjustments:
 
 class TestKindEditability:
     def test_fixed_to_mobile_allowed(
-        self, client: TestClient, user_token: str, default_team: Team
+        self, client: TestClient, user_token: str, default_project: Project
     ) -> None:
-        shelf = make_fixed(client, user_token, default_team.id)
+        shelf = make_fixed(client, user_token, default_project.id)
         resp = client.patch(f"{BASE}/{shelf['id']}", json={"kind": "mobile"}, headers=auth(user_token))
         assert resp.status_code == 200, resp.text
         assert resp.json()["kind"] == "mobile"
 
     def test_mobile_to_fixed_blocked_with_checkout_history(
-        self, client: TestClient, user_token: str, default_team: Team
+        self, client: TestClient, user_token: str, default_project: Project
     ) -> None:
-        tool = make_mobile(client, user_token, default_team.id)
+        tool = make_mobile(client, user_token, default_project.id)
         client.post(f"{BASE}/{tool['id']}/checkout", json={}, headers=auth(user_token))
         client.post(f"{BASE}/{tool['id']}/checkin", json={}, headers=auth(user_token))
 
@@ -887,25 +887,25 @@ class TestKindEditability:
         assert resp.status_code == 409
 
     def test_mobile_to_fixed_allowed_without_checkout_history(
-        self, client: TestClient, user_token: str, default_team: Team
+        self, client: TestClient, user_token: str, default_project: Project
     ) -> None:
-        tool = make_mobile(client, user_token, default_team.id)
+        tool = make_mobile(client, user_token, default_project.id)
         resp = client.patch(f"{BASE}/{tool['id']}", json={"kind": "fixed"}, headers=auth(user_token))
         assert resp.status_code == 200, resp.text
         assert resp.json()["kind"] == "fixed"
 
     def test_change_to_stock_requires_stock_mode(
-        self, client: TestClient, user_token: str, default_team: Team
+        self, client: TestClient, user_token: str, default_project: Project
     ) -> None:
-        shelf = make_fixed(client, user_token, default_team.id)
+        shelf = make_fixed(client, user_token, default_project.id)
         resp = client.patch(f"{BASE}/{shelf['id']}", json={"kind": "stock"}, headers=auth(user_token))
         assert resp.status_code == 422
 
     def test_fixed_to_stock_blocked_with_children(
-        self, client: TestClient, user_token: str, default_team: Team
+        self, client: TestClient, user_token: str, default_project: Project
     ) -> None:
-        parent = make_fixed(client, user_token, default_team.id, name="Non-empty Shelf")
-        make_mobile(client, user_token, default_team.id, name="Inside", parent_id=parent["id"])
+        parent = make_fixed(client, user_token, default_project.id, name="Non-empty Shelf")
+        make_mobile(client, user_token, default_project.id, name="Inside", parent_id=parent["id"])
 
         resp = client.patch(
             f"{BASE}/{parent['id']}",
@@ -915,9 +915,9 @@ class TestKindEditability:
         assert resp.status_code == 409
 
     def test_fixed_to_stock_exact_allowed(
-        self, client: TestClient, user_token: str, default_team: Team
+        self, client: TestClient, user_token: str, default_project: Project
     ) -> None:
-        shelf = make_fixed(client, user_token, default_team.id)
+        shelf = make_fixed(client, user_token, default_project.id)
         resp = client.patch(
             f"{BASE}/{shelf['id']}",
             json={"kind": "stock", "stock_mode": "exact", "quantity": 10},
@@ -929,9 +929,9 @@ class TestKindEditability:
         assert body["quantity"] == 10
 
     def test_fixed_to_stock_fuzzy_allowed(
-        self, client: TestClient, user_token: str, default_team: Team
+        self, client: TestClient, user_token: str, default_project: Project
     ) -> None:
-        shelf = make_fixed(client, user_token, default_team.id)
+        shelf = make_fixed(client, user_token, default_project.id)
         resp = client.patch(
             f"{BASE}/{shelf['id']}",
             json={"kind": "stock", "stock_mode": "fuzzy", "fuzzy_state": "plentiful"},
@@ -941,9 +941,9 @@ class TestKindEditability:
         assert resp.json()["fuzzy_state"] == "plentiful"
 
     def test_stock_to_fixed_nulls_stock_fields(
-        self, client: TestClient, user_token: str, default_team: Team
+        self, client: TestClient, user_token: str, default_project: Project
     ) -> None:
-        stock = make_exact_stock(client, user_token, default_team.id, qty=5)
+        stock = make_exact_stock(client, user_token, default_project.id, qty=5)
         resp = client.patch(f"{BASE}/{stock['id']}", json={"kind": "fixed"}, headers=auth(user_token))
         assert resp.status_code == 200, resp.text
         body = resp.json()
@@ -952,9 +952,9 @@ class TestKindEditability:
         assert body["fuzzy_state"] is None
 
     def test_stock_exact_to_fixed_blocked_with_adjustment_history(
-        self, client: TestClient, user_token: str, default_team: Team
+        self, client: TestClient, user_token: str, default_project: Project
     ) -> None:
-        stock = make_exact_stock(client, user_token, default_team.id, qty=5)
+        stock = make_exact_stock(client, user_token, default_project.id, qty=5)
         client.post(
             f"{BASE}/{stock['id']}/stock-adjustments",
             json={"delta": 3, "note": "restock"},
@@ -964,19 +964,19 @@ class TestKindEditability:
         assert resp.status_code == 409
 
     def test_stock_exact_to_fixed_allowed_without_adjustment_history(
-        self, client: TestClient, user_token: str, default_team: Team
+        self, client: TestClient, user_token: str, default_project: Project
     ) -> None:
         """Setting the initial quantity at creation doesn't write a
         StockLog row (only POST .../stock-adjustments does) — an
         exact-mode item that's never been adjusted is still switchable."""
-        stock = make_exact_stock(client, user_token, default_team.id, qty=5)
+        stock = make_exact_stock(client, user_token, default_project.id, qty=5)
         resp = client.patch(f"{BASE}/{stock['id']}", json={"kind": "fixed"}, headers=auth(user_token))
         assert resp.status_code == 200, resp.text
 
     def test_stock_mode_exact_to_fuzzy_without_kind_change(
-        self, client: TestClient, user_token: str, default_team: Team
+        self, client: TestClient, user_token: str, default_project: Project
     ) -> None:
-        stock = make_exact_stock(client, user_token, default_team.id, qty=5)
+        stock = make_exact_stock(client, user_token, default_project.id, qty=5)
         resp = client.patch(
             f"{BASE}/{stock['id']}",
             json={"stock_mode": "fuzzy", "fuzzy_state": "low"},
@@ -990,9 +990,9 @@ class TestKindEditability:
         assert body["quantity"] is None
 
     def test_stock_mode_change_blocked_with_adjustment_history(
-        self, client: TestClient, user_token: str, default_team: Team
+        self, client: TestClient, user_token: str, default_project: Project
     ) -> None:
-        stock = make_exact_stock(client, user_token, default_team.id, qty=5)
+        stock = make_exact_stock(client, user_token, default_project.id, qty=5)
         client.post(
             f"{BASE}/{stock['id']}/stock-adjustments",
             json={"delta": -2},
@@ -1006,14 +1006,14 @@ class TestKindEditability:
         assert resp.status_code == 409
 
     def test_stock_mode_fuzzy_to_exact_allowed(
-        self, client: TestClient, user_token: str, default_team: Team
+        self, client: TestClient, user_token: str, default_project: Project
     ) -> None:
         stock = client.post(
             BASE + "/",
             json={
                 "name": "Zip Ties",
                 "kind": "stock",
-                "responsible_team_id": default_team.id,
+                "responsible_project_id": default_project.id,
                 "parent_id": _root_id(client, user_token),
                 "stock_mode": "fuzzy",
                 "fuzzy_state": "plentiful",
@@ -1032,9 +1032,9 @@ class TestKindEditability:
         assert body["fuzzy_state"] is None
 
     def test_stock_mode_without_kind_rejected_when_not_already_stock(
-        self, client: TestClient, user_token: str, default_team: Team
+        self, client: TestClient, user_token: str, default_project: Project
     ) -> None:
-        tool = make_mobile(client, user_token, default_team.id)
+        tool = make_mobile(client, user_token, default_project.id)
         resp = client.patch(
             f"{BASE}/{tool['id']}",
             json={"stock_mode": "exact", "quantity": 5},
@@ -1043,19 +1043,19 @@ class TestKindEditability:
         assert resp.status_code == 409
 
     def test_quantity_alone_still_rejected(
-        self, client: TestClient, user_token: str, default_team: Team
+        self, client: TestClient, user_token: str, default_project: Project
     ) -> None:
         """Ongoing exact-mode quantity changes must still go through
         stock-adjustments — quantity is only ever accepted here as a
         transition's starting value, alongside kind or stock_mode."""
-        stock = make_exact_stock(client, user_token, default_team.id, qty=5)
+        stock = make_exact_stock(client, user_token, default_project.id, qty=5)
         resp = client.patch(f"{BASE}/{stock['id']}", json={"quantity": 99}, headers=auth(user_token))
         assert resp.status_code == 422
 
     def test_kind_change_writes_dedicated_audit_entry(
-        self, client: TestClient, admin_token: str, user_token: str, default_team: Team
+        self, client: TestClient, admin_token: str, user_token: str, default_project: Project
     ) -> None:
-        shelf = make_fixed(client, user_token, default_team.id, name="Audited Shelf")
+        shelf = make_fixed(client, user_token, default_project.id, name="Audited Shelf")
         client.patch(f"{BASE}/{shelf['id']}", json={"kind": "mobile"}, headers=auth(user_token))
 
         resp = client.get(f"{BASE_AUDIT}/?entity_id={shelf['id']}", headers=auth(admin_token))
@@ -1077,7 +1077,7 @@ class TestCategories:
         assert "Resistors" in names
 
     def test_delete_blocked_while_in_use(
-        self, client: TestClient, user_token: str, default_team: Team
+        self, client: TestClient, user_token: str, default_project: Project
     ) -> None:
         cat = client.post(
             BASE_CAT + "/", json={"name": "ICs"}, headers=auth(user_token)
@@ -1087,7 +1087,7 @@ class TestCategories:
             json={
                 "name": "ATmega328P",
                 "kind": "stock",
-                "responsible_team_id": default_team.id,
+                "responsible_project_id": default_project.id,
                 "parent_id": _root_id(client, user_token),
                 "category_id": cat["id"],
                 "stock_mode": "exact",
@@ -1106,9 +1106,9 @@ class TestCategories:
 
 class TestAuditLog:
     def test_admin_can_view(
-        self, client: TestClient, admin_token: str, user_token: str, default_team: Team
+        self, client: TestClient, admin_token: str, user_token: str, default_project: Project
     ) -> None:
-        make_mobile(client, user_token, default_team.id)
+        make_mobile(client, user_token, default_project.id)
         resp = client.get(BASE_AUDIT + "/", headers=auth(admin_token))
         assert resp.status_code == 200
         assert len(resp.json()) >= 1
@@ -1117,22 +1117,22 @@ class TestAuditLog:
         resp = client.get(BASE_AUDIT + "/", headers=auth(user_token))
         assert resp.status_code == 403
 
-    def test_reassign_team_logs_one_summary_entry(
-        self, client: TestClient, admin_token: str, user_token: str, default_team: Team
+    def test_reassign_project_logs_one_summary_entry(
+        self, client: TestClient, admin_token: str, user_token: str, default_project: Project
     ) -> None:
-        other_team = client.post(
-            BASE_TEAM + "/", json={"name": "Audit Team"}, headers=auth(user_token)
+        other_project = client.post(
+            BASE_PROJECT + "/", json={"name": "Audit Project"}, headers=auth(user_token)
         ).json()
-        cupboard = make_fixed(client, user_token, default_team.id, name="Audited Cupboard")
-        make_fixed(client, user_token, default_team.id, name="Audited Shelf", parent_id=cupboard["id"])
+        cupboard = make_fixed(client, user_token, default_project.id, name="Audited Cupboard")
+        make_fixed(client, user_token, default_project.id, name="Audited Shelf", parent_id=cupboard["id"])
 
         client.post(
-            f"{BASE}/{cupboard['id']}/reassign-team",
-            json={"team_id": other_team["id"], "cascade_scope": "direct_children"},
+            f"{BASE}/{cupboard['id']}/reassign-project",
+            json={"project_id": other_project["id"], "cascade_scope": "direct_children"},
             headers=auth(user_token),
         )
         resp = client.get(
             f"{BASE_AUDIT}/?entity_id={cupboard['id']}", headers=auth(admin_token)
         )
-        reassign_entries = [e for e in resp.json() if e["action"] == "REASSIGN_TEAM"]
+        reassign_entries = [e for e in resp.json() if e["action"] == "REASSIGN_PROJECT"]
         assert len(reassign_entries) == 1

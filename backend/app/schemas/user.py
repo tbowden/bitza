@@ -127,7 +127,7 @@ class UserDirectoryEntry(BaseModel):
     email, role, and is_active. Those stay behind the admin/superuser-only
     UserListRead gate (see UserService.list_users's permission matrix);
     this schema exists so any authenticated user can browse *who exists*
-    to power pickers like "add a member to this team" without exposing
+    to power pickers like "add a member to this project" without exposing
     the fuller admin directory.
     """
 

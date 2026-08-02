@@ -25,7 +25,7 @@ class BitzaKind(str, enum.Enum):
     mobile — a tool, a toolbox, a multimeter. Checkoutable (see Checkout).
              Its "home" is wherever parent_id currently points — moving it
              is a single-row update; nothing cascades to its contents
-             unless a reassign-team sweep explicitly says so.
+             unless a reassign-project sweep explicitly says so.
     stock  — a quantity-based consumable (resistors, screws). Tracked via
              quantity/fuzzy_state + StockLog. Never checked out.
     """
@@ -80,17 +80,17 @@ class Bitza(Base):
     frontend concern, driven by repeated direct-children requests.
 
     The one deliberate exception is on the WRITE side:
-    BitzaService.reassign_team's all_descendants cascade scope. That is
+    BitzaService.reassign_project's all_descendants cascade scope. That is
     the one place this app walks a full subtree server-side, and it is a
     distinct, explicit action (not an implicit side-effect of an ordinary
     edit) — see the docstring on that method and the project context doc.
 
-    responsible_team_id is REQUIRED at creation and is a SNAPSHOT, not a
+    responsible_project_id is REQUIRED at creation and is a SNAPSHOT, not a
     live inherited link — it does not automatically follow a parent's
-    team if the parent's responsibility later changes. It is purely
+    project if the parent's responsibility later changes. It is purely
     informational ("who to ask"), never a permission gate; anyone may
     create, edit, move, checkout, or adjust stock on any Bitza regardless
-    of responsible_team_id. Only hard delete is restricted (admin/
+    of responsible_project_id. Only hard delete is restricted (admin/
     superuser), and only because the record disappears entirely rather
     than being flagged retired.
 
@@ -111,11 +111,11 @@ class Bitza(Base):
     parent_id: Mapped[str | None] = mapped_column(
         String(36), ForeignKey("bitzas.id", ondelete="RESTRICT"), nullable=True, index=True
     )
-    # RESTRICT, not SET NULL: responsible_team_id is mandatory, so a Team
+    # RESTRICT, not SET NULL: responsible_project_id is mandatory, so a Project
     # can never be silently orphaned out from under a Bitza — deleting a
-    # Team that anything is still responsible-for fails at the DB level.
-    responsible_team_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("teams.id", ondelete="RESTRICT"), nullable=False, index=True
+    # Project that anything is still responsible-for fails at the DB level.
+    responsible_project_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("projects.id", ondelete="RESTRICT"), nullable=False, index=True
     )
     category_id: Mapped[str | None] = mapped_column(
         String(36), ForeignKey("categories.id", ondelete="SET NULL"), nullable=True, index=True
@@ -213,11 +213,11 @@ class Checkout(Base):
     workflows were explicitly ruled out of scope (only the account/role
     permission system from Phase 1 stayed as originally built).
 
-    team_context is a free-text SNAPSHOT, not a live FK to Team. Pre-filled
-    from the holder's primary TeamMember at checkout time if they have
-    one, freely overridable (e.g. helping out a team you're not on). Being
+    project_context is a free-text SNAPSHOT, not a live FK to Project. Pre-filled
+    from the holder's primary ProjectMember at checkout time if they have
+    one, freely overridable (e.g. helping out a project you're not on). Being
     a snapshot means it can never be silently corrupted by the holder's
-    team memberships changing later.
+    project memberships changing later.
     """
 
     __tablename__ = "checkouts"
@@ -231,7 +231,7 @@ class Checkout(Base):
     holder_id: Mapped[str | None] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
     )
-    team_context: Mapped[str | None] = mapped_column(String(150), nullable=True)
+    project_context: Mapped[str | None] = mapped_column(String(150), nullable=True)
     checked_out_at: Mapped[datetime] = mapped_column(UTCDateTime, nullable=False, default=_utcnow)
     checked_in_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
     note: Mapped[str | None] = mapped_column(Text, nullable=True)

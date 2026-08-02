@@ -14,7 +14,7 @@ class BitzaRepository:
     a single non-recursive query targeting direct parent-child rows only,
     with exactly one exception (get_ancestors, a WITH RECURSIVE CTE for
     breadcrumb display) — full subtree traversal for bulk operations
-    (BitzaService.reassign_team's all_descendants scope) is done in the
+    (BitzaService.reassign_project's all_descendants scope) is done in the
     service layer via repeated calls to list_by_parent, not here.
     """
 
@@ -41,18 +41,18 @@ class BitzaRepository:
         self,
         kind: Optional[BitzaKind] = None,
         status: Optional[BitzaStatus] = None,
-        responsible_team_id: Optional[str] = None,
+        responsible_project_id: Optional[str] = None,
         category_id: Optional[str] = None,
     ) -> list[Bitza]:
         """Unscoped by parent — used for cross-cutting queries like "show
-        me everything retired as broken" or "what does team X have"."""
+        me everything retired as broken" or "what does project X have"."""
         stmt = select(Bitza)
         if kind is not None:
             stmt = stmt.where(Bitza.kind == kind)
         if status is not None:
             stmt = stmt.where(Bitza.status == status)
-        if responsible_team_id is not None:
-            stmt = stmt.where(Bitza.responsible_team_id == responsible_team_id)
+        if responsible_project_id is not None:
+            stmt = stmt.where(Bitza.responsible_project_id == responsible_project_id)
         if category_id is not None:
             stmt = stmt.where(Bitza.category_id == category_id)
         stmt = stmt.order_by(Bitza.name)
@@ -62,13 +62,13 @@ class BitzaRepository:
         stmt = select(func.count()).select_from(Bitza).where(Bitza.parent_id == bitza_id)
         return self._db.scalar(stmt) or 0
 
-    def count_by_responsible_team(self, team_id: str) -> int:
-        """Used by TeamService before allowing a Team delete — mirrors
+    def count_by_responsible_project(self, project_id: str) -> int:
+        """Used by ProjectService before allowing a Project delete — mirrors
         the DB-level ondelete='RESTRICT' but lets the service raise a
         clean ConflictError with a useful message instead of surfacing a
         raw IntegrityError."""
         stmt = select(func.count()).select_from(Bitza).where(
-            Bitza.responsible_team_id == team_id
+            Bitza.responsible_project_id == project_id
         )
         return self._db.scalar(stmt) or 0
 

@@ -132,7 +132,7 @@ def create_root() -> None:
     """
     from app.core.exceptions import RootBitzaExistsError
     from app.db.session import SessionLocal
-    from app.models.team import Team
+    from app.models.project import Project
     from app.repositories.audit_repository import AuditRepository
     from app.repositories.bitza_image_repository import BitzaImageRepository
     from app.repositories.bitza_repository import BitzaRepository
@@ -140,7 +140,7 @@ def create_root() -> None:
     from app.repositories.checkout_repository import CheckoutRepository
     from app.repositories.stock_log_repository import StockLogRepository
     from app.repositories.system_config_repository import SystemConfigRepository
-    from app.repositories.team_repository import TeamRepository
+    from app.repositories.project_repository import ProjectRepository
     from app.repositories.user_repository import UserRepository
     from app.services.bitza_service import BitzaService
 
@@ -149,7 +149,7 @@ def create_root() -> None:
         service = BitzaService(
             db=db,
             bitza_repo=BitzaRepository(db),
-            team_repo=TeamRepository(db),
+            project_repo=ProjectRepository(db),
             category_repo=CategoryRepository(db),
             user_repo=UserRepository(db),
             checkout_repo=CheckoutRepository(db),
@@ -170,30 +170,30 @@ def create_root() -> None:
             )
             return
 
-        # --- Find or create the team the root will be responsible-to ---
-        team_repo = TeamRepository(db)
-        team_name = typer.prompt("Responsible team name (e.g. your club or household name)")
-        team = team_repo.get_by_name(team_name)
-        if not team:
-            create_team = typer.confirm(
-                f"No team named '{team_name}' exists yet. Create it?", default=True
+        # --- Find or create the project the root will be responsible-to ---
+        project_repo = ProjectRepository(db)
+        project_name = typer.prompt("Responsible project name (e.g. your club or household name)")
+        project = project_repo.get_by_name(project_name)
+        if not project:
+            create_project = typer.confirm(
+                f"No project named '{project_name}' exists yet. Create it?", default=True
             )
-            if not create_team:
+            if not create_project:
                 typer.echo("No changes made.")
                 return
-            team = team_repo.create(Team(name=team_name))
+            project = project_repo.create(Project(name=project_name))
             db.commit()
-            typer.echo(f"✅  Created team '{team.name}'.\n")
+            typer.echo(f"✅  Created project '{project.name}'.\n")
 
         # --- Collect the root bitza's own name ---
         name = typer.prompt(
             "Root bitza name (e.g. your club or household name — this is the "
             "one permanent top-level container everything else lives under)",
-            default=team_name,
+            default=project_name,
         )
 
         try:
-            root = service.create_root_bitza(name=name, responsible_team_id=team.id)
+            root = service.create_root_bitza(name=name, responsible_project_id=project.id)
             typer.echo(
                 f"\n✅  Root bitza created successfully.\n"
                 f"    ID:   {root.id}\n"

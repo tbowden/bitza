@@ -87,7 +87,7 @@ def list_directory(
     Unlike GET /users/ above (admin/superuser only, full UserListRead),
     this is open to any authenticated user and returns only id +
     display_name. It exists to power pickers — e.g. "add a member to
-    this team" (POST /teams/{team_id}/members needs a user_id, and is
+    this project" (POST /projects/{project_id}/members needs a user_id, and is
     itself open to any authenticated user) — without exposing the
     admin-only email/role/is_active fields GET /users/ gates.
     """

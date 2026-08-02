@@ -19,8 +19,8 @@ from app.schemas.bitza import (
     CheckoutCreate,
     CheckoutRead,
     MyCheckoutRead,
-    ReassignTeamRequest,
-    ReassignTeamResponse,
+    ReassignProjectRequest,
+    ReassignProjectResponse,
     StockAdjustmentCreate,
     StockAdjustmentRead,
 )
@@ -102,7 +102,7 @@ def list_bitzas(
     ),
     kind: Optional[BitzaKind] = Query(None),
     status_filter: Optional[BitzaStatus] = Query(None, alias="status"),
-    responsible_team_id: Optional[str] = Query(None),
+    responsible_project_id: Optional[str] = Query(None),
     category_id: Optional[str] = Query(None),
     current_user: User = Depends(get_current_user),
     svc: BitzaService = Depends(get_bitza_service),
@@ -121,7 +121,7 @@ def list_bitzas(
         root_only=root_only,
         kind=kind,
         status_filter=status_filter,
-        responsible_team_id=responsible_team_id,
+        responsible_project_id=responsible_project_id,
         category_id=category_id,
     )
 
@@ -138,8 +138,8 @@ def create_bitza(
     svc: BitzaService = Depends(get_bitza_service),
 ) -> BitzaRead:
     """Any authenticated user may create any kind of bitza anywhere in
-    the tree. responsible_team_id is required — the frontend should
-    pre-fill it from the parent bitza's responsible_team_id when adding
+    the tree. responsible_project_id is required — the frontend should
+    pre-fill it from the parent bitza's responsible_project_id when adding
     a child, but the backend does not resolve/inherit it automatically."""
     return svc.create_bitza(data=body, actor=current_user)
 
@@ -182,7 +182,7 @@ def update_bitza(
 ) -> BitzaRead:
     """
     Ordinary, single-row edit — never cascades, regardless of kind, even
-    if responsible_team_id is included. Use POST /{bitza_id}/reassign-team
+    if responsible_project_id is included. Use POST /{bitza_id}/reassign-project
     for an explicit cascade scope and a dedicated audit trail entry.
 
     kind (and, independently, stock_mode on an already-stock bitza) is
@@ -253,27 +253,27 @@ def reactivate_bitza(
 
 
 # ---------------------------------------------------------------------------
-# Team reassignment (with cascade)
+# Project reassignment (with cascade)
 # ---------------------------------------------------------------------------
 
 @bitzas_router.post(
-    "/{bitza_id}/reassign-team",
-    response_model=ReassignTeamResponse,
-    summary="Reassign responsible team, optionally cascading to children",
+    "/{bitza_id}/reassign-project",
+    response_model=ReassignProjectResponse,
+    summary="Reassign responsible project, optionally cascading to children",
 )
-def reassign_team(
+def reassign_project(
     bitza_id: str,
-    body: ReassignTeamRequest,
+    body: ReassignProjectRequest,
     current_user: User = Depends(get_current_user),
     svc: BitzaService = Depends(get_bitza_service),
-) -> ReassignTeamResponse:
+) -> ReassignProjectResponse:
     """
     cascade_scope is required: 'none' | 'direct_children' | 'all_descendants'.
-    The backend never infers a default — see ReassignTeamRequest's
+    The backend never infers a default — see ReassignProjectRequest's
     docstring for why the right scope depends on mobility (a cupboard vs
     a toolbox) and is therefore a frontend UX decision, not a backend rule.
     """
-    return svc.reassign_team(bitza_id=bitza_id, data=body, actor=current_user)
+    return svc.reassign_project(bitza_id=bitza_id, data=body, actor=current_user)
 
 
 # ---------------------------------------------------------------------------
@@ -295,7 +295,7 @@ def checkout_bitza(
 ) -> CheckoutRead:
     """
     Holder is always the current user — there is no checking out on
-    behalf of someone else. team_context defaults to your primary team
+    behalf of someone else. project_context defaults to your primary project
     if you have one and don't override it; either way it's a snapshot,
     never a live link.
     """
