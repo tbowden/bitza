@@ -5,7 +5,7 @@ Every layer in Bitza exists for one reason: **each one should only have to think
 ## The request: `POST /api/v1/bitzas/`
 
 ```json
-{"name": "Fluke 117", "kind": "mobile", "responsible_team_id": "abc-123"}
+{"name": "Fluke 117", "kind": "mobile", "responsible_project_id": "abc-123"}
 ```
 
 ### 1. Routing — `main.py` and `router.py`
@@ -61,8 +61,8 @@ That's the entire function. No `if`, no database access, nothing. Its only jobs 
 def create_bitza(self, data: BitzaCreate, actor: User) -> BitzaRead:
     if data.parent_id and not self._bitzas.get(data.parent_id):
         raise _not_found("Parent bitza not found")
-    if not self._teams.get(data.responsible_team_id):
-        raise _not_found("Responsible team not found")
+    if not self._projects.get(data.responsible_project_id):
+        raise _not_found("Responsible project not found")
     purchased_by = data.purchased_by_user_id or actor.id
     bitza = Bitza(id=str(uuid.uuid4()), name=data.name, kind=data.kind, ...)
     created = self._bitzas.create(bitza)
@@ -71,7 +71,7 @@ def create_bitza(self, data: BitzaCreate, actor: User) -> BitzaRead:
     return self._enrich_bitza(created)
 ```
 
-Notice it never writes a `SELECT` or `INSERT` itself — it asks `self._bitzas` (a `BitzaRepository`) and `self._teams` (a `TeamRepository`) to do that. The service's job is *deciding*: does the parent exist, does the team exist, who counts as the purchaser if none was given. It's also the only layer allowed to call `self._db.commit()` — repositories never do, which matters when a service needs several repository calls to succeed or fail together as one transaction.
+Notice it never writes a `SELECT` or `INSERT` itself — it asks `self._bitzas` (a `BitzaRepository`) and `self._projects` (a `ProjectRepository`) to do that. The service's job is *deciding*: does the parent exist, does the project exist, who counts as the purchaser if none was given. It's also the only layer allowed to call `self._db.commit()` — repositories never do, which matters when a service needs several repository calls to succeed or fail together as one transaction.
 
 ### 6. The repository — deliberately dumb
 
@@ -95,7 +95,7 @@ class Bitza(Base):
     __tablename__ = "bitzas"
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
     kind: Mapped[BitzaKind] = mapped_column(Enum(BitzaKind), nullable=False)
-    responsible_team_id: Mapped[str] = mapped_column(ForeignKey("teams.id"), nullable=False)
+    responsible_project_id: Mapped[str] = mapped_column(ForeignKey("projects.id"), nullable=False)
     ...
 ```
 
@@ -103,13 +103,13 @@ When the repository calls `self._db.add(bitza)`, SQLAlchemy translates that Pyth
 
 ### 8. Back up: the service enriches the response
 
-Notice the last line was `return self._enrich_bitza(created)`, not `return created`. `created` is a raw ORM object — it only has exactly the columns in the table. But the API response also needs things like `responsible_team_name`, which isn't a column at all — it's looked up from the `Team` table on the way out:
+Notice the last line was `return self._enrich_bitza(created)`, not `return created`. `created` is a raw ORM object — it only has exactly the columns in the table. But the API response also needs things like `responsible_project_name`, which isn't a column at all — it's looked up from the `Project` table on the way out:
 
 ```python
 def _enrich_bitza(self, bitza: Bitza) -> BitzaRead:
     r = BitzaRead.model_validate(bitza)          # ORM → Pydantic
-    team = self._teams.get(bitza.responsible_team_id)
-    r.responsible_team_name = team.name if team else ""
+    project = self._projects.get(bitza.responsible_project_id)
+    r.responsible_project_name = project.name if project else ""
     return r
 ```
 
@@ -128,7 +128,7 @@ The endpoint returns that `BitzaRead` object. Because the route declared `respon
 Two very different failure points, worth telling apart:
 
 - **Bad shape** (missing field, wrong type, `kind='mobile'` with a `quantity` set) — caught by Pydantic in step 3, *before* your endpoint function is even called. Automatic `422`.
-- **Bad business fact** (a `responsible_team_id` that doesn't exist) — caught by the service in step 5, which raises `HTTPException(404, ...)`. FastAPI has built-in handling for any `HTTPException`, so raising it is enough — you don't write any `try/except` in the endpoint to catch it.
+- **Bad business fact** (a `responsible_project_id` that doesn't exist) — caught by the service in step 5, which raises `HTTPException(404, ...)`. FastAPI has built-in handling for any `HTTPException`, so raising it is enough — you don't write any `try/except` in the endpoint to catch it.
 
 ## The cheat sheet
 

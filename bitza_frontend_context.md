@@ -68,7 +68,7 @@ Grounded in the subject matter rather than a generic brand palette:
 ```
 core/
   models/       one .ts file per API entity, plain interfaces/types, index.ts barrel export
-  services/     one per resource (TeamService, BitzaService, UserService, ...),
+  services/     one per resource (ProjectService, BitzaService, UserService, ...),
                 thin HttpClient wrappers, @Service()-decorated, no business logic beyond
                 the odd client-side default (e.g. cascade_scope UI defaults)
   interceptors/ auth.interceptor.ts only
@@ -96,12 +96,13 @@ features/
 - **Team vs Project label**: settled as always "Project" (Stage 5) —
   `AppConfigService` and its runtime `localStorage`-persisted toggle were
   removed entirely rather than kept as a settings option, since the
-  choice turned out to be permanent, not deployment-specific. `Team`/
-  `team_id`/etc. remain the real backend and TypeScript identifiers
-  throughout (routes, class names, model fields) — only rendered UI text
-  changed. See `bitza_project_context.md`'s "Teams" section for the
-  now-planned backend rename (Stage 6, not started) this doesn't cover.
-- **`cascade_scope` UI defaults** (reassign-team dialog): `fixed`/`stock`
+  choice turned out to be permanent, not deployment-specific. Stage 6
+  then carried that rename into the actual identifiers too — `Project`/
+  `project_id`/etc. are now the real backend and TypeScript identifiers
+  throughout (routes, class names, model fields), not just the rendered
+  UI text. See `bitza_project_context.md`'s "Projects" section and
+  `bitza_open_issues.md`'s Stage 6 entry for what that pass covered.
+- **`cascade_scope` UI defaults** (reassign-project dialog): `fixed`/`stock`
   → `none`, `mobile` → `all_descendants`, always overridable. This is
   frontend-only convenience — the backend never infers or defaults this
   and always requires it explicitly, per the backend docs.
@@ -195,7 +196,7 @@ Angular version bumps and something stops working.
    originally built client-side via RxJS `expand` walking `parent_id` one
    hop at a time — replaced once the endpoint was added during Stage 4),
    create/edit with kind-conditional fields, retire/reactivate,
-   reassign-team with cascade_scope, category management, QR label
+   reassign-project with cascade_scope, category management, QR label
    generation + a `/bitza/:id` → `/bitzas/:id` redirect route matching
    the exact singular path the docs say gets baked into printed physical
    tags.
@@ -254,7 +255,7 @@ display_name only) rather than relaxing the existing gate.
 
 **Two design questions came out of this work — both resolved and built**
 during Stage 4: a personal `/me` landing page (`GET /checkouts/mine`,
-`GET /teams/mine` — see `bitza_project_context.md`), and `kind`
+`GET /projects/mine` — see `bitza_project_context.md`), and `kind`
 editability, relabelled "Type" in the UI (see `bitza_project_context.md`'s
 `kind` section for the final conditional-editability rules).
 
@@ -346,7 +347,7 @@ plus a few frontend-specific scope cuts made along the way:
   the docs originally asked for this; only per-bitza history exists.
   **Partially built** — a personal (not club-wide) version of "what's
   checked out" now exists as the `/me` landing page (`GET
-  /checkouts/mine`, `GET /teams/mine` — see `bitza_project_context.md`).
+  /checkouts/mine`, `GET /projects/mine` — see `bitza_project_context.md`).
   Still not built: low-stock alerts, and a "recent activity" feed — the
   latter was explicitly left undecided, not just unbuilt.
 - **Component test suite, e2e suite, real accessibility audit** — see

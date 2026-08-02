@@ -51,7 +51,7 @@ that might otherwise look inconsistent:
 ## Auth contract (backend → frontend)
 
 **Unchanged from the original design — Phase 1 was never touched by the
-Team/Bitza redesign.**
+Bitza/Project redesign.**
 
 The backend uses a dual-token JWT system. The frontend is responsible for
 managing both tokens client-side.
@@ -135,7 +135,7 @@ password fails.
 
 Three roles: `superuser`, `admin`, `user`. The current user's role is
 available in the `GET /api/v1/users/me` response. This governs account
-management only — it has **no bearing** on anything in the Team/Bitza model
+management only — it has **no bearing** on anything in the Project/Bitza model
 below except one thing: hard-deleting a Bitza is admin/superuser only.
 
 | What to show/hide | superuser | admin | user |
@@ -154,18 +154,18 @@ security.
 
 ---
 
-## Permissions in the Team/Bitza model — the trust model
+## Permissions in the Project/Bitza model — the trust model
 
 This is the one section worth reading before anything else, because it's
 easy to assume more restriction exists than actually does.
 
 **Any authenticated user may, with no approval and no ownership check:**
-- Create, rename, or delete a team (delete is blocked only if a bitza still
-  references it)
-- Add any user to any team, or remove any user from any team — including
-  removing someone else, not just themselves
+- Create, rename, or delete a project (delete is blocked only if a bitza
+  still references it)
+- Add any user to any project, or remove any user from any project —
+  including removing someone else, not just themselves
 - Create, edit, move, retire, or reactivate any bitza, regardless of who
-  created it or which team is responsible for it
+  created it or which project is responsible for it
 - Check out or check in any mobile bitza
 - Adjust stock quantity or fuzzy state on any stock bitza
 
@@ -176,89 +176,90 @@ easy to assume more restriction exists than actually does.
   original Phase 2 design).
 
 Why so open: club membership is transient (people stop turning up, lose
-interest, or simply forget which team they're nominally on), and the
+interest, or simply forget which project they're nominally on), and the
 alternative — some kind of ownership or approval gate — was tried in early
 design passes and consistently added friction without adding real value,
 since the actual failure mode this app cares about is bad *data entry*
-("Fred says team X has the last torque wrench, but it's actually with Dave"),
-not bad *authorisation*. If someone abuses this trust, that's a
+("Fred says project X has the last torque wrench, but it's actually with
+Dave"), not bad *authorisation*. If someone abuses this trust, that's a
 conversation with that person, not a feature request.
 
 ---
 
-## Teams
+## Projects
 
-`Team` is the universal "who's responsible for this" entity. It serves two
-purposes that look different but are structurally identical:
+`Project` is the universal "who's responsible for this" entity. It serves
+two purposes that look different but are structurally identical:
 
-- **Club deployment**: a dozen-plus real teams (Aero, Suspension, Battery, a
-  "Workshop" team standing in for what would otherwise be a special
-  "workshop manager" role — see below), each with several members.
-- **Home deployment**: one team, or a handful for distinct projects.
+- **Club deployment**: a dozen-plus real projects (Aero, Suspension,
+  Battery, a "Workshop" project standing in for what would otherwise be a
+  special "workshop manager" role — see below), each with several members.
+- **Home deployment**: one project, or a handful for distinct projects.
 
-**"Team" vs "Project" started as a display-label-only choice; the
-frontend side of that is done, and a backend rename is the next planned
-stage.** ("A team is indistinguishable from a project" is the underlying
+**"Team" vs "Project" started as a display-label-only choice (Stage 5,
+frontend); Stage 6 then carried the rename all the way into the backend
+too.** ("A team is indistinguishable from a project" is the underlying
 reasoning — trying to distinguish "real teams" from "projects" added a
-distinction the schema never needed.) The Angular UI now always says
-"Project"/"Projects" — `AppConfigService` and its runtime toggle were
-removed entirely in Stage 5 rather than kept as a settings option, since
-the choice turned out to be permanent, not deployment-specific.
+distinction the schema never needed.) There is now exactly one name for
+this concept, top to bottom — no `Team` identifier remains anywhere in
+the codebase.
 
-**This section previously said the database/API "stay named `Team`
-throughout — never in question." That's no longer the plan.** The next
-piece of work (Stage 6 — not yet started or scoped, see
-`bitza_open_issues.md`) is renaming the backend to match: model/table,
-schema classes, service/repository, and endpoint paths
-(`/api/v1/teams/` → presumably `/api/v1/projects/`), most likely needing
-an Alembic migration for the table/column rename. Until that lands,
-everything below this point in this document — `Team`, `team_id`,
-`responsible_team_id`, `/api/v1/teams/`, etc. — still reflects the
-current, real backend shape; read it as "what exists today," not as a
-settled decision.
+**This section used to say the database/API would "stay named `Team`
+throughout — never in question," then later that a backend rename was
+next-but-unscoped. Both are now history.** Stage 6 (see
+`bitza_open_issues.md`) renamed the model/table, schema classes,
+service/repository, and endpoint paths (`/api/v1/teams/` →
+`/api/v1/projects/`) via an Alembic migration, and the frontend's own
+identifiers followed in the same pass — files, classes, routes, models,
+not just display text. Everything below this point in this document now
+reflects that shape.
 
 ### Workshop manager is not a special role
 
 There is no `is_workshop_manager` flag anywhere. "Workshop manager" (and
-"assistant workshop manager") is just membership of a `Team` named
-"Workshop" — indistinguishable in the schema from being on any other team.
-Most workshop managers are also on a regular team at the same time, which
-is why membership is many-to-many, not a single field on `User`.
+"assistant workshop manager") is just membership of a `Project` named
+"Workshop" — indistinguishable in the schema from being on any other
+project. Most workshop managers are also on a regular project at the same
+time, which is why membership is many-to-many, not a single field on
+`User`.
 
 ### Membership
 
-`TeamMember` is a plain many-to-many join (`user_id`, `team_id`) — **no
-history, no start/end dates, no "team lead" flag.** A user can belong to
-zero, one, or many teams simultaneously. Leaving a team is a row deletion,
-full stop; "who was on what team when" was explicitly ruled out as a
-requirement.
+`ProjectMember` is a plain many-to-many join (`user_id`, `project_id`) —
+**no history, no start/end dates, no "project lead" flag.** A user can
+belong to zero, one, or many projects simultaneously. Leaving a project is
+a row deletion, full stop; "who was on what project when" was explicitly
+ruled out as a requirement.
 
-`is_primary` on a membership row marks at most one team as a given user's
-default (enforced by unsetting any existing primary in the same transaction
-when a new one is set — the same rotation pattern used for refresh tokens).
-It carries **no permission meaning whatsoever** — its only purpose is
-pre-filling the `team_context` field when checking out a mobile bitza. It's
-fully overridable at checkout time (e.g. helping out a team you're not on).
+`is_primary` on a membership row marks at most one project as a given
+user's default (enforced by unsetting any existing primary in the same
+transaction when a new one is set — the same rotation pattern used for
+refresh tokens). It carries **no permission meaning whatsoever** — its
+only purpose is pre-filling the `project_context` field when checking out
+a mobile bitza. It's fully overridable at checkout time (e.g. helping out
+a project you're not on).
 
 ```
-GET    /api/v1/teams/                      List all teams
-GET    /api/v1/teams/?user_id=<id>         Teams a specific user belongs to
-POST   /api/v1/teams/                      Create a team
-GET    /api/v1/teams/{id}                  Get a team
-PATCH  /api/v1/teams/{id}                  Rename / describe
-DELETE /api/v1/teams/{id}                  Delete (409 if any bitza still responsible-to it)
+GET    /api/v1/projects/                      List all projects
+GET    /api/v1/projects/?user_id=<id>         Projects a specific user belongs to
+POST   /api/v1/projects/                      Create a project
+GET    /api/v1/projects/{id}                  Get a project
+PATCH  /api/v1/projects/{id}                  Rename / describe
+DELETE /api/v1/projects/{id}                  Delete (409 if any bitza still responsible-to it)
 
-GET    /api/v1/teams/{id}/members          List members
-POST   /api/v1/teams/{id}/members          Add a member  {user_id, is_primary?}
-PATCH  /api/v1/teams/{id}/members/{user_id}  Set/unset primary  {is_primary}
-DELETE /api/v1/teams/{id}/members/{user_id}  Remove a member
+GET    /api/v1/projects/{id}/members          List members
+POST   /api/v1/projects/{id}/members          Add a member  {user_id, is_primary?}
+PATCH  /api/v1/projects/{id}/members/{user_id}  Set/unset primary  {is_primary}
+DELETE /api/v1/projects/{id}/members/{user_id}  Remove a member
 
-GET    /api/v1/teams/mine                  Current user's teams — {team_id, team_name,
-                                            is_primary} per row, one call, added for
-                                            the /me landing page (Stage 4/5)
+GET    /api/v1/projects/mine                  Current user's projects — {project_id,
+                                               project_name, is_primary} per row, one
+                                               call, added for the /me landing page
+                                               (Stage 4/5)
 ```
 
 ---
+
 
 ## Bitzas — the unified location/container/item model
 
@@ -322,7 +323,7 @@ root, not roots themselves. Depth below the root is unlimited — a bitza's
 **The root bitza is locked down** (Stage 5): `PATCH` on it may only ever
 change `name`, and only an admin/superuser may do even that — every other
 field, and every other mutating endpoint that could touch it
-(`reassign-team` included), is rejected outright (`RootBitzaProtectedError`
+(`reassign-project` included), is rejected outright (`RootBitzaProtectedError`
 /409 for the field, `PermissionDeniedError`/403 for the role, role wins if
 both apply). This reflects the root's role as the tree's permanent,
 structural anchor rather than an ordinary bitza that happens to have no
@@ -344,7 +345,7 @@ instructions, `GET /bitzas/?parent_id=X` returns direct children only — a
 single non-recursive query. If the frontend wants "everything on Shelf 4
 including inside its boxes", it drives that by issuing repeated
 direct-children requests itself. The one exception, and it's a *write*-path
-exception, is described under "Reassigning responsible team" below.
+exception, is described under "Reassigning responsible project" below.
 
 There is **no privacy feature**. An earlier design pass added
 private/shared visibility flags on locations; it was removed entirely as a
@@ -354,20 +355,20 @@ description field, and everything else privacy would have added (cascade
 rules, opaque 404s, permission checks on every read) wasn't worth it for a
 club or household where everyone already knows each other.
 
-### Responsible team — a snapshot, not a live inherited link
+### Responsible project — a snapshot, not a live inherited link
 
-`responsible_team_id` is **required at creation** and purely informational
-— "who to ask about this", never a permission gate (see "Permissions"
-above). Critically, it does **not** automatically follow a parent's team if
-the parent's responsibility changes later — it's a snapshot, set once at
-creation, and only ever changes via an explicit edit or the reassign-team
-sweep below.
+`responsible_project_id` is **required at creation** and purely
+informational — "who to ask about this", never a permission gate (see
+"Permissions" above). Critically, it does **not** automatically follow a
+parent's project if the parent's responsibility changes later — it's a
+snapshot, set once at creation, and only ever changes via an explicit edit
+or the reassign-project sweep below.
 
-The frontend is expected to pre-fill `responsible_team_id` from the parent
-bitza's value when adding a child under an existing one (since it already
-has the parent loaded to navigate there) — the backend only validates that
-a team was supplied and that it exists; it never infers or resolves a value
-itself.
+The frontend is expected to pre-fill `responsible_project_id` from the
+parent bitza's value when adding a child under an existing one (since it
+already has the parent loaded to navigate there) — the backend only
+validates that a project was supplied and that it exists; it never infers
+or resolves a value itself.
 
 ### Retiring vs deleting
 
@@ -394,34 +395,34 @@ DELETE /api/v1/bitzas/{id}                              admin/superuser only, 40
 "admin report" use case — it's just a filtered list, not a special endpoint,
 and it's open to any user like every other read in this model.
 
-### Reassigning responsible team — the one deliberate cascade
+### Reassigning responsible project — the one deliberate cascade
 
-An ordinary `PATCH /bitzas/{id}` may change `responsible_team_id`, but it
+An ordinary `PATCH /bitzas/{id}` may change `responsible_project_id`, but it
 **only ever touches that one row** — no matter what `kind` the bitza is.
 Cascading to children is never an implicit side-effect of an edit.
 
-When a genuine sweep is wanted (e.g. "the battery team is taking the two
+When a genuine sweep is wanted (e.g. "the battery project is taking the two
 bottom shelves of the brown cupboard"), use the dedicated endpoint:
 
 ```
-POST /api/v1/bitzas/{id}/reassign-team
-{"team_id": "...", "cascade_scope": "none" | "direct_children" | "all_descendants"}
+POST /api/v1/bitzas/{id}/reassign-project
+{"project_id": "...", "cascade_scope": "none" | "direct_children" | "all_descendants"}
 ```
 
 `cascade_scope` is **required** — the backend never guesses a default. Which
 scope actually makes sense depends on the bitza's mobility, but that's a
 **frontend UX default, not a backend rule**: a cupboard's reassign dialog
-might default its scope picker to `none` (moving the cupboard between teams
-doesn't necessarily move what's sitting on its shelves), while a toolbox's
-might default to `all_descendants` (the tools inside travel with it). Either
-can always be overridden by the person doing it.
+might default its scope picker to `none` (moving the cupboard between
+projects doesn't necessarily move what's sitting on its shelves), while a
+toolbox's might default to `all_descendants` (the tools inside travel with
+it). Either can always be overridden by the person doing it.
 
 `all_descendants` is the **one deliberate exception** to "never traverse the
 full subtree on the backend" — it's a rare, explicit write operation, walked
 level-by-level via repeated direct-children queries in the service layer
 (not a single recursive SQL statement), and produces exactly one audit log
-entry summarising the whole sweep (count + old/new team), not one entry per
-affected row.
+entry summarising the whole sweep (count + old/new project), not one entry
+per affected row.
 
 ### Checkout (kind = `mobile`)
 
@@ -431,14 +432,14 @@ are no due dates and no approvals; this is deliberately just state, not a
 workflow.
 
 ```
-POST /api/v1/bitzas/{id}/checkout   {team_context?, note?}   → 201, the open Checkout
-POST /api/v1/bitzas/{id}/checkin    {note?}                  → 200, the closed Checkout
-GET  /api/v1/bitzas/{id}/checkouts                           → history, newest first
-GET  /api/v1/checkouts/mine                                  → every open checkout held
-                                                                 by the current user,
-                                                                 across the whole tree —
-                                                                 not scoped to one bitza;
-                                                                 added for /me (Stage 4/5)
+POST /api/v1/bitzas/{id}/checkout   {project_context?, note?}   → 201, the open Checkout
+POST /api/v1/bitzas/{id}/checkin    {note?}                     → 200, the closed Checkout
+GET  /api/v1/bitzas/{id}/checkouts                              → history, newest first
+GET  /api/v1/checkouts/mine                                     → every open checkout held
+                                                                    by the current user,
+                                                                    across the whole tree —
+                                                                    not scoped to one bitza;
+                                                                    added for /me (Stage 4/5)
 ```
 
 The holder is always the current authenticated user — there is no checking
@@ -446,13 +447,13 @@ something out on someone else's behalf. Anyone may check something *in*,
 not just whoever checked it out (e.g. "I found this lying around and
 returned it").
 
-`team_context` is a **free-text snapshot**, not a live FK to `Team`. If
-omitted, it's pre-filled from the holder's primary `TeamMember` at the
-moment of checkout, but it's just a string from then on — if that team
-membership is later removed entirely, the historical checkout record is
-completely unaffected. This snapshot behaviour is what makes it safe for a
-person checking out a tool to log it against a team they're just helping
-that day, without corrupting anything.
+`project_context` is a **free-text snapshot**, not a live FK to `Project`.
+If omitted, it's pre-filled from the holder's primary `ProjectMember` at
+the moment of checkout, but it's just a string from then on — if that
+project membership is later removed entirely, the historical checkout
+record is completely unaffected. This snapshot behaviour is what makes it
+safe for a person checking out a tool to log it against a project they're
+just helping that day, without corrupting anything.
 
 ### Stock (kind = `stock`)
 
@@ -502,7 +503,7 @@ path for these files.
 
 `purchased_by_user_id` doubles as "added by" — the project deliberately
 decided these never need separating ("all I really need to record is that
-it was purchased by B for team X", regardless of who physically typed the
+it was purchased by B for project X", regardless of who physically typed the
 entry into Bitza). Defaults to the creating user if not supplied explicitly.
 `vendor`, `purchase_date`, `order_url` are free-form, all optional.
 
@@ -524,12 +525,12 @@ GET /api/v1/bitzas/
     ?root_only=true            top-level bitzas only (ignored if parent_id set)
     ?kind=fixed|mobile|stock
     ?status=active|retired
-    ?responsible_team_id=<id>
+    ?responsible_project_id=<id>
     ?category_id=<id>
 ```
 
 No privacy filtering exists — every bitza is visible to every authenticated
-user regardless of who created it or which team is responsible for it.
+user regardless of who created it or which project is responsible for it.
 
 ---
 
@@ -581,7 +582,7 @@ should be additive rather than a refactor:
   year"). Structurally a many-to-many between bitzas and a new
   `PackingList`/`PackingListItem` pair, with a per-pairing status
   (`needs_packing` / `packed` / `returned`). Deliberately kept independent
-  of `responsible_team_id`, `parent_id`, and checkout state — ticking
+  of `responsible_project_id`, `parent_id`, and checkout state — ticking
   "needs to be packed" is a planning decision, physically moving something
   to "comp trailer" is a separate `parent_id` update, and neither should
   affect who's responsible for the item. Keeping those three axes
@@ -600,7 +601,7 @@ Stage 3:
   across browser restarts.
 - **Cascade-scope defaults**: the frontend infers a default from the
   bitza's `kind` (`mobile` → `all_descendants`, everything else → `none`),
-  always overridable — see "Reassigning responsible team" above. The
+  always overridable — see "Reassigning responsible project" above. The
   backend itself never infers a default; `cascade_scope` is always
   required explicitly.
 

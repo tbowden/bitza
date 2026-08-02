@@ -1,10 +1,11 @@
 # Bitza — open issues
 
-**Status: Stage 5 is complete.** All four items below were fixed, tested,
-applied, and pushed across four reviewed patches. This document now
-tracks **Stage 6**, the next planned work. For full project orientation
-start at `bitza_context_restoration.md`; for the backend architecture
-these items touch, see `bitza_project_context.md`.
+**Status: Stage 6 is complete.** Backend `Team` → `Project` rename shipped
+across two reviewed patches (backend, then frontend — see the "Stage 6
+(complete)" section below for what was actually decided and delivered).
+**No Stage 7 is scoped yet.** For full project orientation start at
+`bitza_context_restoration.md`; for the backend architecture these items
+touch, see `bitza_project_context.md`.
 
 ---
 
@@ -30,49 +31,79 @@ particular came directly out of this stage).
 
 ---
 
-## Stage 6 (next, not started) — Team → Project, backend
+## Stage 6 (complete) — Team → Project, backend
 
-**Not yet scoped — needs a discussion before any patches get cut.** This
-reverses what `bitza_project_context.md` used to say ("the database and
-API stay named `Team` — never in question"); that section has already
-been updated to reflect the reversal. The frontend-only pass (Stage 5,
-item 4 above) is done; this is the equivalent move for everything Stage 5
-deliberately left alone.
+Scoped via a short round of questions, then delivered as two reviewed
+patches (backend, then frontend), each verified against a fresh clone
+with its full test suite green before being applied.
 
-**What's known to be involved, at minimum** (informational, not a
-commitment to this exact scope — flagging so a scoping conversation has
-somewhere to start):
+**Scoping decisions made:**
+- Route paths renamed in the same pass — `/api/v1/teams/` →
+  `/api/v1/projects/`, including `/reassign-team` → `/reassign-project`.
+- Frontend internals renamed in the same pass too — files, classes,
+  routes, models. Nothing was left saying `Team` anywhere, backend or
+  frontend.
+- Migration done as a straightforward in-place rename, not
+  additive-then-cutover — no production deployments existed yet.
 
-- `models/team.py` — the SQLAlchemy model and its table name.
-- An Alembic migration to actually rename the table/columns (`teams`,
-  `team_id` FKs across `bitzas`, `team_members`, `checkouts`'
-  `team_context` is free-text so likely untouched — worth confirming).
-- `schemas/team.py` — `Team`/`TeamCreate`/`TeamRead`/`TeamListRead`/
-  `TeamMemberRead` and friends.
-- `repositories/team_repository.py`, `services/team_service.py`.
-- `api/v1/endpoints/teams.py` and the route prefix itself
-  (`/api/v1/teams/` → presumably `/api/v1/projects/`).
-- Backend tests (`tests/test_teams.py` and any cross-references in
-  `test_bitzas.py`).
-- The frontend's own `Team`-named identifiers that Stage 5 deliberately
-  left alone — models, services, route paths (`/teams`), component/class/
-  file names (`TeamsList`, `team-detail.ts`, etc.) — since the frontend
-  was scoped as display-labels-only last time, all of this still says
-  `Team` today and would need revisiting if the backend rename lands.
+**What actually changed:**
+- `models/team.py` → `models/project.py`, `schemas/team.py` →
+  `schemas/project.py`, `repositories/team_repository.py` →
+  `repositories/project_repository.py`, `services/team_service.py` →
+  `services/project_service.py`, `api/v1/endpoints/teams.py` →
+  `api/v1/endpoints/projects.py`, plus every cross-referencing file
+  (`bitza` model/schema/repository/service, `user` schema/service,
+  `audit`, `dependencies.py`, `router.py`, `cli.py`).
+- New Alembic migration renaming `teams`→`projects`,
+  `team_members`→`project_members` (incl. its `team_id`→`project_id`
+  column and unique constraint), `bitzas.responsible_team_id`→
+  `responsible_project_id`, and `checkouts.team_context`→
+  `project_context` (the one field flagged as "worth confirming" — it
+  got renamed too, for full consistency, since the whole-stack rename
+  was in scope).
+- Frontend: `features/teams/` → `features/projects/`
+  (`teams-list`→`projects-list`, `team-detail`→`project-detail`,
+  `team-form-dialog`→`project-form-dialog`), `reassign-team-dialog` →
+  `reassign-project-dialog`, `team.model.ts`/`team.service.ts` →
+  `project.model.ts`/`project.service.ts`, and every route/routerLink
+  cross-reference.
+- 166 backend tests / 42 frontend tests, all still green.
 
-**Open questions worth settling before starting, not during:**
-- Does the route path change (`/teams` → `/projects`) at the same time,
-  or does the backend rename land first with routes following later?
-  A route change is more disruptive than a table rename (bookmarks,
-  any external integrations) and may warrant its own decision.
-- Same question for the frontend's internal naming (files/classes/CSS) —
-  worth doing as part of this, or a separate future pass? Stage 5 treated
-  this as explicitly out of scope; that call is worth revisiting now that
-  the backend is following, not just the display text.
-- Migration strategy for existing deployments (rename in place vs.
-  additive-then-cutover) — depends on whether this project has any real
-  deployments with data yet worth worrying about.
+**Known follow-up, not yet done:**
+- None — the tutorial doc (`backend/docs/ARCHITECTURAL_OVERVIEW.md`) and
+  all three context docs (`bitza_project_context.md`,
+  `bitza_frontend_context.md`, `bitza_context_restoration.md`) have been
+  swept for stale `team`/`Team` references and brought in line with the
+  Stage 6 rename as a same-day follow-up (docs-only, no code changes).
 
-Once scoped, this should get the same treatment as Stage 5: divided into
-reviewable chunks (backend first, frontend second, matching how Stage 5
-was run), one patch file per chunk, applied one at a time.
+---
+
+## Stage 7 — not yet defined
+
+Nothing is scoped here yet. The backlog items below are scattered
+mentions from the other context docs (`bitza_frontend_context.md`'s
+"Deliberately out of scope / deferred" section, `bitza_project_context.md`'s
+"Still genuinely open" note) — informational, not a commitment to any of
+this being next:
+
+- **Accessibility**: no automated tooling has ever been run (no axe-core,
+  no Lighthouse pass), no keyboard-only walkthrough, no screen reader
+  spot-check. Fixes so far were found by manually reading Material's
+  compiled source, not a systematic scan.
+- **No component-level or e2e tests** — the 42 frontend tests are all
+  service-layer (`HttpTestingController`), nothing exercises a
+  component's template or rendered output.
+- **Milestone 1–4 inline-template retrofit** — those components predate
+  the Stage 5-onward external-template convention and haven't been
+  converted.
+- **Cross-bitza dashboards** — low-stock alerts and a club-wide "recent
+  activity" feed were explicitly left undecided, not just unbuilt (the
+  `/me` page's personal "what's checked out" view is the only piece
+  that exists).
+- **Comp/trip packing lists** — no backend support exists; not built.
+- **In-app barcode/serial scanner** (camera-based) — deferred; QR
+  route/label scanning is the supported mechanism today.
+- **Image thumbnails in list/table views** — scope cut to avoid an
+  authenticated-blob-fetch-per-row cost.
+- **Offline behaviour** — out of scope for now; the SQLite backend has
+  no sync capability.

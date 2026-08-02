@@ -36,7 +36,7 @@ Angular Material.
 | **3** | Angular frontend | ✅ All 5 planned milestones built (Foundation, Teams, Bitzas core, Bitza actions, Admin & polish) — see caveats below |
 | **4** | Frontend/backend schema reconciliation, completeness pass, `/me` landing page, `kind` editability | ✅ Done. The dedicated doc this was tracked in has been retired — durable lessons folded into this file below; current behavior is described directly in `bitza_project_context.md`/`bitza_frontend_context.md` |
 | **5** | Post-reconciliation fixes (login→`/me` default, root bitza lockdown, stock-can't-have-children, Team→Project frontend rename) | ✅ Done — four items, applied and pushed across four reviewed patches |
-| **6** | Team → Project, backend | 🔲 Planned, not started, not yet scoped — see `bitza_open_issues.md` |
+| **6** | Team → Project, backend (+ frontend internals) | ✅ Done — two reviewed patches (backend, then frontend), applied and pushed |
 
 **Testing methodology — read this before assuming anything is "confirmed working":**
 For most of this project's life there was **zero live click-through** —
@@ -148,7 +148,7 @@ bitza/
 ├── bitza_project_context.md         ← full backend design doc, API contract
 ├── bitza_context_restoration.md     ← this file
 ├── bitza_frontend_context.md        ← full frontend design doc — READ THIS for any frontend work
-├── bitza_open_issues.md             ← active/next task: Stage 6 (Team→Project backend rename)
+├── bitza_open_issues.md             ← tracker: Stage 6 shipped, Stage 7 not yet scoped
 ├── backend/
 │   ├── AI_instructions.md
 │   ├── ARCHITECTURAL_OVERVIEW.md
@@ -177,11 +177,11 @@ bitza/
             │   └── app-shell.ts      toolbar + responsive sidenav + skip link
             └── features/
                 ├── auth/login/
-                ├── teams/            list, detail, form dialog, add-member dialog
+                ├── projects/         list, detail, form dialog, add-member dialog
                 ├── bitzas/           browser (tree nav), form/retire/reassign/move dialogs,
                 │                     checkout/stock/image sections + their dialogs,
                 │                     category manager
-                ├── me/               personal landing page (checked-out items, your teams) — the default route
+                ├── me/               personal landing page (checked-out items, your projects) — the default route
                 ├── users/            admin-only list + form dialog
                 └── audit/            admin-only log view
 ```
@@ -198,11 +198,11 @@ specific to that stack. `package-lock.json` is committed on purpose.
 
 See `bitza_project_context.md` for the full contract. The frontend
 implements essentially all of it: auth (login/refresh/logout with
-rotational tokens), teams + membership (including `/teams/mine`), the
-full bitza tree model (create/edit/retire/reactivate/reassign-team,
-root-bitza lockdown, stock-can't-have-children), checkout/checkin
-(including `/checkouts/mine`), stock adjustments, images (authenticated
-blob fetch), categories, users (admin), and the audit log.
+rotational tokens), projects + membership (including `/projects/mine`),
+the full bitza tree model (create/edit/retire/reactivate/
+reassign-project, root-bitza lockdown, stock-can't-have-children),
+checkout/checkin (including `/checkouts/mine`), stock adjustments, images
+(authenticated blob fetch), categories, users (admin), and the audit log.
 
 ---
 
@@ -210,7 +210,7 @@ blob fetch), categories, users (admin), and the audit log.
 
 - **Full backend domain model, every schema/endpoint shape, and the
   reasoning behind each design decision** → `bitza_project_context.md`
-- **Active task: Team → Project backend rename, not yet scoped** →
+- **Active task: none scoped yet (Stage 6 shipped; Stage 7 undefined)** →
   `bitza_open_issues.md`
 - **Full frontend architecture: what's built, conventions, Signal Forms
   usage notes, known assumptions needing backend confirmation, testing
