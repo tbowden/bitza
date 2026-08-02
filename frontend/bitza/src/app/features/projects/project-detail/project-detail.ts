@@ -11,18 +11,18 @@ import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatTableModule } from '@angular/material/table';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { catchError, of, switchMap } from 'rxjs';
-import { TeamService } from '../../../core/services/team.service';
-import { Team, TeamMember } from '../../../core/models';
+import { ProjectService } from '../../../core/services/project.service';
+import { Project, ProjectMember } from '../../../core/models';
 import { ConfirmDialog, ConfirmDialogData } from '../../../shared/confirm-dialog/confirm-dialog';
 import {
   AddMemberDialog,
   AddMemberDialogData,
   AddMemberResult,
 } from '../add-member-dialog/add-member-dialog';
-import { TeamFormDialog, TeamFormResult } from '../team-form-dialog/team-form-dialog';
+import { ProjectFormDialog, ProjectFormResult } from '../project-form-dialog/project-form-dialog';
 
 @Component({
-  selector: 'app-team-detail',
+  selector: 'app-project-detail',
   imports: [
     RouterLink,
     MatButtonModule,
@@ -33,27 +33,27 @@ import { TeamFormDialog, TeamFormResult } from '../team-form-dialog/team-form-di
     MatTooltipModule,
   ],
   template: `
-    <a routerLink="/teams" class="back-link">
+    <a routerLink="/projects" class="back-link">
       <mat-icon>arrow_back</mat-icon>
       Back to projects
     </a>
 
     @if (loadError()) {
       <p class="error-text" role="alert">Couldn't load this project.</p>
-    } @else if (team(); as team) {
+    } @else if (project(); as project) {
       <div class="page-header">
         <div>
-          <h1>{{ team.name }}</h1>
-          @if (team.description) {
-            <p class="description">{{ team.description }}</p>
+          <h1>{{ project.name }}</h1>
+          @if (project.description) {
+            <p class="description">{{ project.description }}</p>
           }
         </div>
         <div class="header-actions">
-          <button mat-stroked-button type="button" (click)="onEditTeam(team)">
+          <button mat-stroked-button type="button" (click)="onEditProject(project)">
             <mat-icon>edit</mat-icon>
             Edit
           </button>
-          <button mat-stroked-button color="warn" type="button" (click)="onDeleteTeam(team)">
+          <button mat-stroked-button color="warn" type="button" (click)="onDeleteProject(project)">
             <mat-icon>delete</mat-icon>
             Delete
           </button>
@@ -62,7 +62,7 @@ import { TeamFormDialog, TeamFormResult } from '../team-form-dialog/team-form-di
 
       <div class="members-header">
         <h2>Members</h2>
-        <button mat-flat-button color="primary" type="button" (click)="onAddMember(team.id)">
+        <button mat-flat-button color="primary" type="button" (click)="onAddMember(project.id)">
           <mat-icon>person_add</mat-icon>
           Add member
         </button>
@@ -92,13 +92,13 @@ import { TeamFormDialog, TeamFormResult } from '../team-form-dialog/team-form-di
                 [attr.aria-pressed]="member.is_primary"
                 [attr.aria-label]="
                   member.is_primary
-                    ? 'Unset ' + member.user_display_name + ' as primary team'
-                    : 'Set ' + member.user_display_name + ' as primary team'
+                    ? 'Unset ' + member.user_display_name + ' as primary project'
+                    : 'Set ' + member.user_display_name + ' as primary project'
                 "
                 [matTooltip]="
-                  member.is_primary ? 'Primary team — click to unset' : 'Set as primary team'
+                  member.is_primary ? 'Primary project — click to unset' : 'Set as primary project'
                 "
-                (click)="onTogglePrimary(team.id, member)"
+                (click)="onTogglePrimary(project.id, member)"
               >
                 <mat-icon>{{ member.is_primary ? 'star' : 'star_border' }}</mat-icon>
               </button>
@@ -112,8 +112,8 @@ import { TeamFormDialog, TeamFormResult } from '../team-form-dialog/team-form-di
                 mat-icon-button
                 type="button"
                 aria-label="Remove member"
-                matTooltip="Remove from team"
-                (click)="onRemoveMember(team.id, member)"
+                matTooltip="Remove from project"
+                (click)="onRemoveMember(project.id, member)"
               >
                 <mat-icon>person_remove</mat-icon>
               </button>
@@ -176,16 +176,16 @@ import { TeamFormDialog, TeamFormResult } from '../team-form-dialog/team-form-di
     }
   `,
 })
-export class TeamDetail {
+export class ProjectDetail {
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
-  private readonly teamService = inject(TeamService);
+  private readonly projectService = inject(ProjectService);
   private readonly dialog = inject(MatDialog);
   private readonly snackBar = inject(MatSnackBar);
 
   protected readonly columns = ['username', 'primary', 'actions'];
 
-  private readonly teamId = toSignal(
+  private readonly projectId = toSignal(
     this.route.paramMap.pipe(switchMap((params) => of(params.get('id') ?? ''))),
     { initialValue: '' },
   );
@@ -195,15 +195,15 @@ export class TeamDetail {
 
   private readonly reload = signal(0);
   private readonly reload$ = toObservable(this.reload);
-  private readonly teamId$ = toObservable(this.teamId);
+  private readonly projectId$ = toObservable(this.projectId);
 
-  protected readonly team = toSignal(
-    this.teamId$.pipe(
+  protected readonly project = toSignal(
+    this.projectId$.pipe(
       switchMap((id) => {
         if (!id) {
           return of(undefined);
         }
-        return this.teamService.get(id).pipe(
+        return this.projectService.get(id).pipe(
           catchError(() => {
             this.loadErrorSignal.set(true);
             return of(undefined);
@@ -217,11 +217,11 @@ export class TeamDetail {
   private readonly membersResult = toSignal(
     this.reload$.pipe(
       switchMap(() => {
-        const id = this.teamId();
+        const id = this.projectId();
         if (!id) {
-          return of<TeamMember[] | undefined>(undefined);
+          return of<ProjectMember[] | undefined>(undefined);
         }
-        return this.teamService.listMembers(id).pipe(catchError(() => of<TeamMember[]>([])));
+        return this.projectService.listMembers(id).pipe(catchError(() => of<ProjectMember[]>([])));
       }),
     ),
     { initialValue: undefined },
@@ -230,22 +230,22 @@ export class TeamDetail {
   protected readonly membersLoading = computed(() => this.membersResult() === undefined);
   protected readonly members = computed(() => this.membersResult() ?? []);
 
-  protected onEditTeam(team: Team): void {
-    const dialogRef = this.dialog.open(TeamFormDialog, {
+  protected onEditProject(project: Project): void {
+    const dialogRef = this.dialog.open(ProjectFormDialog, {
       width: '480px',
-      data: { team },
+      data: { project },
     });
-    dialogRef.afterClosed().subscribe((result?: TeamFormResult) => {
+    dialogRef.afterClosed().subscribe((result?: ProjectFormResult) => {
       if (!result) {
         return;
       }
-      this.teamService.update(team.id, result).subscribe(() => this.reload.update((n) => n + 1));
+      this.projectService.update(project.id, result).subscribe(() => this.reload.update((n) => n + 1));
     });
   }
 
-  protected onDeleteTeam(team: Team): void {
+  protected onDeleteProject(project: Project): void {
     const data: ConfirmDialogData = {
-      title: `Delete ${team.name}?`,
+      title: `Delete ${project.name}?`,
       message: `This can't be undone. It will fail if any bitza is still responsible-to this project.`,
       confirmLabel: 'Delete',
       destructive: true,
@@ -255,8 +255,8 @@ export class TeamDetail {
       if (!confirmed) {
         return;
       }
-      this.teamService.delete(team.id).subscribe({
-        next: () => this.router.navigateByUrl('/teams'),
+      this.projectService.delete(project.id).subscribe({
+        next: () => this.router.navigateByUrl('/projects'),
         error: (err: HttpErrorResponse) => {
           if (err.status === 409) {
             this.snackBar.open(
@@ -265,7 +265,7 @@ export class TeamDetail {
               { duration: 6000 },
             );
           } else {
-            this.snackBar.open('Something went wrong deleting this team.', 'Dismiss', {
+            this.snackBar.open('Something went wrong deleting this project.', 'Dismiss', {
               duration: 6000,
             });
           }
@@ -274,7 +274,7 @@ export class TeamDetail {
     });
   }
 
-  protected onAddMember(teamId: string): void {
+  protected onAddMember(projectId: string): void {
     const data: AddMemberDialogData = {
       existingMemberUserIds: this.members().map((member) => member.user_id),
     };
@@ -283,22 +283,22 @@ export class TeamDetail {
       if (!result) {
         return;
       }
-      this.teamService
-        .addMember(teamId, { user_id: result.userId, is_primary: result.isPrimary })
+      this.projectService
+        .addMember(projectId, { user_id: result.userId, is_primary: result.isPrimary })
         .subscribe(() => this.reload.update((n) => n + 1));
     });
   }
 
-  protected onTogglePrimary(teamId: string, member: TeamMember): void {
-    this.teamService
-      .setPrimary(teamId, member.user_id, !member.is_primary)
+  protected onTogglePrimary(projectId: string, member: ProjectMember): void {
+    this.projectService
+      .setPrimary(projectId, member.user_id, !member.is_primary)
       .subscribe(() => this.reload.update((n) => n + 1));
   }
 
-  protected onRemoveMember(teamId: string, member: TeamMember): void {
+  protected onRemoveMember(projectId: string, member: ProjectMember): void {
     const data: ConfirmDialogData = {
       title: 'Remove member?',
-      message: `Remove ${member.user_display_name} from the team.`,
+      message: `Remove ${member.user_display_name} from the project.`,
       confirmLabel: 'Remove',
       destructive: true,
     };
@@ -307,8 +307,8 @@ export class TeamDetail {
       if (!confirmed) {
         return;
       }
-      this.teamService
-        .removeMember(teamId, member.user_id)
+      this.projectService
+        .removeMember(projectId, member.user_id)
         .subscribe(() => this.reload.update((n) => n + 1));
     });
   }

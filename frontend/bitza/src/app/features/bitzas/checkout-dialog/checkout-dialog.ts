@@ -7,7 +7,7 @@ import { MatInputModule } from '@angular/material/input';
 import { CheckoutRequest } from '../../../core/models';
 
 interface CheckoutFormModel {
-  team_context: string;
+  project_context: string;
   note: string;
 }
 
@@ -20,9 +20,9 @@ interface CheckoutFormModel {
     <form (submit)="onSubmit($event)" novalidate>
       <mat-dialog-content>
         <mat-form-field appearance="outline" class="full-width">
-          <mat-label>Team (optional)</mat-label>
-          <input matInput type="text" [formField]="checkoutForm.team_context" />
-          <mat-hint>Leave blank to use your primary team automatically.</mat-hint>
+          <mat-label>Project (optional)</mat-label>
+          <input matInput type="text" [formField]="checkoutForm.project_context" />
+          <mat-hint>Leave blank to use your primary project automatically.</mat-hint>
         </mat-form-field>
 
         <mat-form-field appearance="outline" class="full-width">
@@ -46,7 +46,7 @@ interface CheckoutFormModel {
 export class CheckoutDialog {
   protected readonly dialogRef = inject(MatDialogRef<CheckoutDialog, CheckoutRequest>);
 
-  protected readonly model = signal<CheckoutFormModel>({ team_context: '', note: '' });
+  protected readonly model = signal<CheckoutFormModel>({ project_context: '', note: '' });
   protected readonly checkoutForm = form(this.model);
 
   protected onSubmit(event: Event): void {
@@ -54,7 +54,7 @@ export class CheckoutDialog {
     submit(this.checkoutForm, async () => {
       const value = this.model();
       this.dialogRef.close({
-        team_context: value.team_context || undefined,
+        project_context: value.project_context || undefined,
         note: value.note || undefined,
       });
       return undefined;

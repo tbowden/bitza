@@ -11,14 +11,14 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { catchError, of, switchMap } from 'rxjs';
 import { AuthService } from '../../../core/services/auth.service';
 import { CheckoutService } from '../../../core/services/checkout.service';
-import { TeamService } from '../../../core/services/team.service';
-import { CheckinRequest, MyCheckout, MyTeamMembership } from '../../../core/models';
+import { ProjectService } from '../../../core/services/project.service';
+import { CheckinRequest, MyCheckout, MyProjectMembership } from '../../../core/models';
 import { CheckinDialog } from '../../bitzas/checkin-dialog/checkin-dialog';
 
 /**
  * The '/me' personal landing page — "what you have checked out" and
- * "what teams you're on", pulled from GET /checkouts/mine and
- * GET /teams/mine respectively. Both endpoints are always scoped to
+ * "what projects you're on", pulled from GET /checkouts/mine and
+ * GET /projects/mine respectively. Both endpoints are always scoped to
  * the caller server-side, so this component never passes a user id
  * anywhere.
  */
@@ -66,8 +66,8 @@ import { CheckinDialog } from '../../bitzas/checkin-dialog/checkin-dialog';
               <mat-card-content>
                 <p>
                   Checked out since {{ checkout.checked_out_at | date: 'medium' }}
-                  @if (checkout.team_context) {
-                    for <strong>{{ checkout.team_context }}</strong>
+                  @if (checkout.project_context) {
+                    for <strong>{{ checkout.project_context }}</strong>
                   }
                 </p>
                 @if (checkout.note) {
@@ -83,8 +83,8 @@ import { CheckinDialog } from '../../bitzas/checkin-dialog/checkin-dialog';
       }
     </section>
 
-    <section aria-labelledby="teams-heading">
-      <h2 id="teams-heading">Projects you're on</h2>
+    <section aria-labelledby="projects-heading">
+      <h2 id="projects-heading">Projects you're on</h2>
 
       @if (membershipsError()) {
         <p class="error-text" role="alert">Couldn't load your projects. Try refreshing.</p>
@@ -95,10 +95,10 @@ import { CheckinDialog } from '../../bitzas/checkin-dialog/checkin-dialog';
       } @else if (memberships().length === 0) {
         <p>You're not on any projects yet.</p>
       } @else {
-        <ul class="team-list">
-          @for (membership of memberships(); track membership.team_id) {
+        <ul class="project-list">
+          @for (membership of memberships(); track membership.project_id) {
             <li>
-              <a [routerLink]="['/teams', membership.team_id]">{{ membership.team_name }}</a>
+              <a [routerLink]="['/projects', membership.project_id]">{{ membership.project_name }}</a>
               @if (membership.is_primary) {
                 <mat-icon
                   class="primary-star"
@@ -145,7 +145,7 @@ import { CheckinDialog } from '../../bitzas/checkin-dialog/checkin-dialog';
       font-size: 0.875rem;
     }
 
-    .team-list {
+    .project-list {
       list-style: none;
       margin: 1rem 0 0;
       padding: 0;
@@ -154,7 +154,7 @@ import { CheckinDialog } from '../../bitzas/checkin-dialog/checkin-dialog';
       gap: 0.5rem;
     }
 
-    .team-list li {
+    .project-list li {
       display: flex;
       align-items: center;
       gap: 0.375rem;
@@ -181,7 +181,7 @@ import { CheckinDialog } from '../../bitzas/checkin-dialog/checkin-dialog';
 export class MePage {
   private readonly authService = inject(AuthService);
   private readonly checkoutService = inject(CheckoutService);
-  private readonly teamService = inject(TeamService);
+  private readonly projectService = inject(ProjectService);
   private readonly dialog = inject(MatDialog);
 
   protected readonly user = this.authService.currentUser;
@@ -215,10 +215,10 @@ export class MePage {
   private readonly membershipsResult = toSignal(
     this.reload$.pipe(
       switchMap(() =>
-        this.teamService.listMine().pipe(
+        this.projectService.listMine().pipe(
           catchError(() => {
             this.membershipsErrorSignal.set(true);
-            return of<MyTeamMembership[]>([]);
+            return of<MyProjectMembership[]>([]);
           }),
         ),
       ),

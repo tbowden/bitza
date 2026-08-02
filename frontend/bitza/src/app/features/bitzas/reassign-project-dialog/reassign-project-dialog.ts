@@ -6,27 +6,27 @@ import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/materia
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatSelectModule } from '@angular/material/select';
 import { catchError, of } from 'rxjs';
-import { TeamService } from '../../../core/services/team.service';
-import { BitzaKind, CascadeScope, TeamListItem } from '../../../core/models';
+import { ProjectService } from '../../../core/services/project.service';
+import { BitzaKind, CascadeScope, ProjectListItem } from '../../../core/models';
 
-export interface ReassignTeamDialogData {
+export interface ReassignProjectDialogData {
   kind: BitzaKind;
-  currentTeamId: string;
+  currentProjectId: string;
 }
 
-export interface ReassignTeamResult {
-  teamId: string;
+export interface ReassignProjectResult {
+  projectId: string;
   cascadeScope: CascadeScope;
 }
 
 interface ReassignFormModel {
-  team_id: string;
+  project_id: string;
   cascade_scope: CascadeScope | '';
 }
 
 /**
  * Frontend UX default only — the backend never infers one and always
- * requires cascade_scope explicitly. See "Reassigning responsible team".
+ * requires cascade_scope explicitly. See "Reassigning responsible project".
  * A cupboard (fixed) defaults to not sweeping its contents; a toolbox
  * (mobile) defaults to sweeping everything inside since the tools travel
  * with it; stock defaults to none since it rarely has children.
@@ -36,7 +36,7 @@ function defaultCascadeScope(kind: BitzaKind): CascadeScope {
 }
 
 @Component({
-  selector: 'app-reassign-team-dialog',
+  selector: 'app-reassign-project-dialog',
   imports: [FormField, MatButtonModule, MatDialogModule, MatFormFieldModule, MatSelectModule],
   template: `
     <h2 mat-dialog-title>Reassign project</h2>
@@ -45,12 +45,12 @@ function defaultCascadeScope(kind: BitzaKind): CascadeScope {
       <mat-dialog-content>
         <mat-form-field appearance="outline" class="full-width">
           <mat-label>New project</mat-label>
-          <mat-select [formField]="reassignForm.team_id">
-            @for (team of teams(); track team.id) {
-              <mat-option [value]="team.id">{{ team.name }}</mat-option>
+          <mat-select [formField]="reassignForm.project_id">
+            @for (project of projects(); track project.id) {
+              <mat-option [value]="project.id">{{ project.name }}</mat-option>
             }
           </mat-select>
-          @if (reassignForm.team_id().touched() && reassignForm.team_id().invalid()) {
+          @if (reassignForm.project_id().touched() && reassignForm.project_id().invalid()) {
             <mat-error>Choose a project.</mat-error>
           }
         </mat-form-field>
@@ -82,23 +82,23 @@ function defaultCascadeScope(kind: BitzaKind): CascadeScope {
     }
   `,
 })
-export class ReassignTeamDialog {
-  protected readonly dialogRef = inject(MatDialogRef<ReassignTeamDialog, ReassignTeamResult>);
-  private readonly data = inject<ReassignTeamDialogData>(MAT_DIALOG_DATA);
-  private readonly teamService = inject(TeamService);
+export class ReassignProjectDialog {
+  protected readonly dialogRef = inject(MatDialogRef<ReassignProjectDialog, ReassignProjectResult>);
+  private readonly data = inject<ReassignProjectDialogData>(MAT_DIALOG_DATA);
+  private readonly projectService = inject(ProjectService);
 
-  protected readonly teams = toSignal(
-    this.teamService.list().pipe(catchError(() => of<TeamListItem[]>([]))),
+  protected readonly projects = toSignal(
+    this.projectService.list().pipe(catchError(() => of<ProjectListItem[]>([]))),
     { initialValue: [] },
   );
 
   protected readonly model = signal<ReassignFormModel>({
-    team_id: this.data.currentTeamId,
+    project_id: this.data.currentProjectId,
     cascade_scope: defaultCascadeScope(this.data.kind),
   });
 
   protected readonly reassignForm = form(this.model, (path) => {
-    required(path.team_id, { message: 'Project is required' });
+    required(path.project_id, { message: 'Project is required' });
     required(path.cascade_scope, { message: 'Scope is required' });
   });
 
@@ -107,7 +107,7 @@ export class ReassignTeamDialog {
     submit(this.reassignForm, async () => {
       const value = this.model();
       this.dialogRef.close({
-        teamId: value.team_id,
+        projectId: value.project_id,
         cascadeScope: value.cascade_scope as CascadeScope,
       });
       return undefined;

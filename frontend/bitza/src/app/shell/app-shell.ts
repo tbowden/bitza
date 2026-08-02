@@ -47,7 +47,7 @@ import { AuthService } from '../core/services/auth.service';
           </a>
           <a
             mat-list-item
-            routerLink="/teams"
+            routerLink="/projects"
             routerLinkActive="active-link"
             (click)="isHandset() && sidenav.close()"
           >

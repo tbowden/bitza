@@ -9,12 +9,12 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { catchError, of, switchMap } from 'rxjs';
 import { AuthService } from '../../../core/services/auth.service';
-import { TeamService } from '../../../core/services/team.service';
-import { TeamListItem } from '../../../core/models';
-import { TeamFormDialog, TeamFormResult } from '../team-form-dialog/team-form-dialog';
+import { ProjectService } from '../../../core/services/project.service';
+import { ProjectListItem } from '../../../core/models';
+import { ProjectFormDialog, ProjectFormResult } from '../project-form-dialog/project-form-dialog';
 
 @Component({
-  selector: 'app-teams-list',
+  selector: 'app-projects-list',
   imports: [
     MatButtonModule,
     MatCardModule,
@@ -37,33 +37,33 @@ import { TeamFormDialog, TeamFormResult } from '../team-form-dialog/team-form-di
 
     @if (loadError()) {
       <p class="error-text" role="alert">Couldn't load projects. Try refreshing.</p>
-    } @else if (teamsLoading()) {
+    } @else if (projectsLoading()) {
       <div class="loading-row">
         <mat-progress-spinner diameter="28" mode="indeterminate"></mat-progress-spinner>
       </div>
-    } @else if (visibleTeams().length === 0) {
+    } @else if (visibleProjects().length === 0) {
       <p>No projects to show yet.</p>
     } @else {
-      <div class="team-grid">
-        @for (team of visibleTeams(); track team.id) {
+      <div class="project-grid">
+        @for (project of visibleProjects(); track project.id) {
           <mat-card
-            class="team-card"
+            class="project-card"
             role="button"
             tabindex="0"
-            [attr.aria-label]="'Open ' + team.name"
-            (click)="openTeam(team.id)"
-            (keydown.enter)="openTeam(team.id)"
-            (keydown.space)="openTeam(team.id); $event.preventDefault()"
+            [attr.aria-label]="'Open ' + project.name"
+            (click)="openProject(project.id)"
+            (keydown.enter)="openProject(project.id)"
+            (keydown.space)="openProject(project.id); $event.preventDefault()"
           >
             <mat-card-header>
               <mat-card-title
-                ><h2>{{ team.name }}</h2></mat-card-title
+                ><h2>{{ project.name }}</h2></mat-card-title
               >
             </mat-card-header>
-            @if (team.member_count > 0) {
+            @if (project.member_count > 0) {
               <mat-card-content
-                >{{ team.member_count }} member{{
-                  team.member_count === 1 ? '' : 's'
+                >{{ project.member_count }} member{{
+                  project.member_count === 1 ? '' : 's'
                 }}</mat-card-content
               >
             }
@@ -85,14 +85,14 @@ import { TeamFormDialog, TeamFormResult } from '../team-form-dialog/team-form-di
       margin-bottom: 1rem;
     }
 
-    .team-grid {
+    .project-grid {
       display: grid;
       grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
       gap: 1rem;
       margin-top: 1rem;
     }
 
-    .team-card {
+    .project-card {
       cursor: pointer;
     }
 
@@ -107,9 +107,9 @@ import { TeamFormDialog, TeamFormResult } from '../team-form-dialog/team-form-di
     }
   `,
 })
-export class TeamsList {
+export class ProjectsList {
   private readonly authService = inject(AuthService);
-  private readonly teamService = inject(TeamService);
+  private readonly projectService = inject(ProjectService);
   private readonly dialog = inject(MatDialog);
   private readonly router = inject(Router);
 
@@ -121,13 +121,13 @@ export class TeamsList {
   private readonly reload = signal(0);
   private readonly reload$ = toObservable(this.reload);
 
-  private readonly allTeams = toSignal(
+  private readonly allProjects = toSignal(
     this.reload$.pipe(
       switchMap(() =>
-        this.teamService.list().pipe(
+        this.projectService.list().pipe(
           catchError(() => {
             this.loadErrorSignal.set(true);
-            return of<TeamListItem[]>([]);
+            return of<ProjectListItem[]>([]);
           }),
         ),
       ),
@@ -135,39 +135,39 @@ export class TeamsList {
     { initialValue: undefined },
   );
 
-  private readonly myTeams = toSignal(
+  private readonly myProjects = toSignal(
     this.reload$.pipe(
       switchMap(() => {
         const userId = this.authService.currentUser()?.id;
         if (!userId) {
-          return of<TeamListItem[]>([]);
+          return of<ProjectListItem[]>([]);
         }
-        return this.teamService.list(userId).pipe(catchError(() => of<TeamListItem[]>([])));
+        return this.projectService.list(userId).pipe(catchError(() => of<ProjectListItem[]>([])));
       }),
     ),
     { initialValue: undefined },
   );
 
-  protected readonly teamsLoading = computed(() =>
-    this.onlyMine() ? this.myTeams() === undefined : this.allTeams() === undefined,
+  protected readonly projectsLoading = computed(() =>
+    this.onlyMine() ? this.myProjects() === undefined : this.allProjects() === undefined,
   );
 
-  protected readonly visibleTeams = computed(() => {
-    const teams = this.onlyMine() ? this.myTeams() : this.allTeams();
-    return teams ?? [];
+  protected readonly visibleProjects = computed(() => {
+    const projects = this.onlyMine() ? this.myProjects() : this.allProjects();
+    return projects ?? [];
   });
 
   protected onCreate(): void {
-    const dialogRef = this.dialog.open(TeamFormDialog, { width: '480px' });
-    dialogRef.afterClosed().subscribe((result?: TeamFormResult) => {
+    const dialogRef = this.dialog.open(ProjectFormDialog, { width: '480px' });
+    dialogRef.afterClosed().subscribe((result?: ProjectFormResult) => {
       if (!result) {
         return;
       }
-      this.teamService.create(result).subscribe(() => this.reload.update((n) => n + 1));
+      this.projectService.create(result).subscribe(() => this.reload.update((n) => n + 1));
     });
   }
 
-  protected openTeam(teamId: string): void {
-    this.router.navigate(['/teams', teamId]);
+  protected openProject(projectId: string): void {
+    this.router.navigate(['/projects', projectId]);
   }
 }

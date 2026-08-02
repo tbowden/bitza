@@ -8,7 +8,7 @@ import { AdminUserUpdate, User, UserCreate, UserDirectoryEntry, UserSelfUpdate }
  * Covers /users/me (open to any authenticated user), the admin/superuser-
  * only /users/ directory (`list`, `create`, `adminUpdate`, `delete`), and
  * /users/directory (`directory`) — a minimal, ungated listing added
- * specifically so pickers like the team add-member dialog can look
+ * specifically so pickers like the project add-member dialog can look
  * someone up without needing admin/superuser access.
  */
 @Service()

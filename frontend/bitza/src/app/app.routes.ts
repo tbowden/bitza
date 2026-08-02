@@ -38,16 +38,16 @@ export const routes: Routes = [
         redirectTo: 'bitzas/:id',
       },
       {
-        path: 'teams',
+        path: 'projects',
         loadComponent: () =>
-          import('./features/teams/teams-list/teams-list').then((m) => m.TeamsList),
-        title: 'Teams',
+          import('./features/projects/projects-list/projects-list').then((m) => m.ProjectsList),
+        title: 'Projects',
       },
       {
-        path: 'teams/:id',
+        path: 'projects/:id',
         loadComponent: () =>
-          import('./features/teams/team-detail/team-detail').then((m) => m.TeamDetail),
-        title: 'Team detail',
+          import('./features/projects/project-detail/project-detail').then((m) => m.ProjectDetail),
+        title: 'Project detail',
       },
       {
         path: 'me',

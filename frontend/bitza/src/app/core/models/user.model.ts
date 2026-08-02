@@ -1,6 +1,6 @@
 /**
  * Roles govern account management only (see "User roles" in
- * bitza_project_context.md) — they have no bearing on the Team/Bitza
+ * bitza_project_context.md) — they have no bearing on the Project/Bitza
  * trust model except gating hard-delete of a bitza and the audit log.
  */
 export type UserRole = 'superuser' | 'admin' | 'user';
@@ -21,7 +21,7 @@ export interface User {
   /**
    * Present on UserRead (GET /me, GET /{id}, create, update) but not on
    * the compact UserListRead that list() returns — same list/detail
-   * split as Bitza and Team, just for this one field, so marked optional
+   * split as Bitza and Project, just for this one field, so marked optional
    * here rather than introducing a separate list-item type for it alone.
    */
   updated_at?: string;
@@ -33,7 +33,7 @@ export interface User {
  * which is genuinely admin/superuser-only — confirmed against
  * UserService.list_users's permission matrix in the backend, and by a
  * passing test asserting a 403 for a plain user). This exists
- * specifically to power pickers like the team add-member dialog.
+ * specifically to power pickers like the project add-member dialog.
  */
 export interface UserDirectoryEntry {
   id: string;

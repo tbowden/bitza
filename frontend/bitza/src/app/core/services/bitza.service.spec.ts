@@ -57,16 +57,16 @@ describe('BitzaService', () => {
     await promise;
   });
 
-  it('reassigns team with the required cascade_scope', async () => {
+  it('reassigns project with the required cascade_scope', async () => {
     const promise = firstValueFrom(
-      service.reassignTeam('b1', { team_id: 't2', cascade_scope: 'all_descendants' }),
+      service.reassignProject('b1', { project_id: 't2', cascade_scope: 'all_descendants' }),
     );
-    const req = httpMock.expectOne(`${environment.apiUrl}/bitzas/b1/reassign-team`);
+    const req = httpMock.expectOne(`${environment.apiUrl}/bitzas/b1/reassign-project`);
     expect(req.request.method).toBe('POST');
-    expect(req.request.body).toEqual({ team_id: 't2', cascade_scope: 'all_descendants' });
+    expect(req.request.body).toEqual({ project_id: 't2', cascade_scope: 'all_descendants' });
     req.flush({
       bitza_id: 'b1',
-      team_id: 't2',
+      project_id: 't2',
       cascade_scope: 'all_descendants',
       updated_count: 5,
     });

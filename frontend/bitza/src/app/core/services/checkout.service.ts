@@ -11,8 +11,8 @@ export class CheckoutService {
 
   /**
    * The holder is always the current authenticated user — there's no
-   * checking something out on someone else's behalf. If team_context is
-   * omitted, the backend pre-fills it from the holder's primary team at
+   * checking something out on someone else's behalf. If project_context is
+   * omitted, the backend pre-fills it from the holder's primary project at
    * the moment of checkout; the frontend doesn't need to compute that
    * itself. See "Checkout (kind = mobile)".
    */

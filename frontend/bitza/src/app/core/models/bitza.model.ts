@@ -13,8 +13,8 @@ export type StockMode = 'exact' | 'fuzzy';
 export type FuzzyState = 'plentiful' | 'low' | 'empty';
 
 /**
- * `cascade_scope` heuristics for the reassign-team dialog are a frontend
- * UX default only (see "Reassigning responsible team") — this type documents
+ * `cascade_scope` heuristics for the reassign-project dialog are a frontend
+ * UX default only (see "Reassigning responsible project") — this type documents
  * the three legal values, not a suggestion of which to default to.
  */
 export type CascadeScope = 'none' | 'direct_children' | 'all_descendants';
@@ -26,9 +26,9 @@ export interface Bitza {
   parent_id: string | null;
   /** Populated by the service — null only for the root bitza. */
   parent_name: string | null;
-  responsible_team_id: string;
+  responsible_project_id: string;
   /** Populated by the service. */
-  responsible_team_name: string;
+  responsible_project_name: string;
   status: BitzaStatus;
   /**
    * True for exactly one bitza system-wide — the tree's single, permanent
@@ -92,7 +92,7 @@ export interface BitzaListItem {
   kind: BitzaKind;
   parent_id: string | null;
   parent_name: string | null;
-  responsible_team_name: string;
+  responsible_project_name: string;
   category_name: string | null;
   status: BitzaStatus;
   quantity: number | null;
@@ -105,7 +105,7 @@ export interface BitzaListItem {
 /**
  * One row of GET /bitzas/{id}/ancestors — deliberately lighter than
  * BitzaListItem (just enough to link and label a breadcrumb crumb, no
- * team/category lookups per ancestor). Ordered nearest parent first,
+ * project/category lookups per ancestor). Ordered nearest parent first,
  * root last; excludes the bitza itself — the frontend reverses this
  * for root-first breadcrumb display. Replaces the old N-sequential-
  * GET-calls approach (RxJS `expand` walking parent_id one hop at a
@@ -125,7 +125,7 @@ export interface BitzaCreate {
    * backend CLI's create-root command, never through this endpoint.
    */
   parent_id: string;
-  responsible_team_id: string;
+  responsible_project_id: string;
   category_id?: string | null;
   description?: string | null;
   tags?: string[];
@@ -154,7 +154,7 @@ export interface BitzaUpdate {
   name?: string;
   kind?: BitzaKind;
   parent_id?: string | null;
-  responsible_team_id?: string;
+  responsible_project_id?: string;
   category_id?: string | null;
   description?: string | null;
   tags?: string[];
@@ -172,20 +172,20 @@ export interface BitzaRetireRequest {
   note?: string;
 }
 
-export interface BitzaReassignTeamRequest {
-  team_id: string;
+export interface BitzaReassignProjectRequest {
+  project_id: string;
   cascade_scope: CascadeScope;
 }
 
 /**
- * POST /bitzas/{id}/reassign-team's actual response — previously
+ * POST /bitzas/{id}/reassign-project's actual response — previously
  * discarded entirely (the service typed this call as returning void).
  * updated_count matters most for all_descendants: it's the only
  * confirmation of how many rows the cascade actually touched.
  */
-export interface ReassignTeamResponse {
+export interface ReassignProjectResponse {
   bitza_id: string;
-  team_id: string;
+  project_id: string;
   cascade_scope: CascadeScope;
   updated_count: number;
 }
@@ -196,7 +196,7 @@ export interface BitzaListParams {
   root_only?: boolean;
   kind?: BitzaKind;
   status?: BitzaStatus;
-  responsible_team_id?: string;
+  responsible_project_id?: string;
   category_id?: string;
   retired_reason?: RetiredReason;
 }

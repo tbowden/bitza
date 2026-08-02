@@ -10,8 +10,8 @@ export interface Checkout {
   bitza_id: string;
   holder_id: string | null;
   holder_display_name: string;
-  /** Free-text snapshot, not a live FK — safe even if the team is deleted later. */
-  team_context: string | null;
+  /** Free-text snapshot, not a live FK — safe even if the project is deleted later. */
+  project_context: string | null;
   note: string | null;
   checked_out_at: string;
   checked_in_at: string | null;
@@ -30,13 +30,13 @@ export interface MyCheckout {
   bitza_name: string;
   /** Null only in the edge case where the bitza row itself is gone. */
   bitza_kind: BitzaKind | null;
-  team_context: string | null;
+  project_context: string | null;
   checked_out_at: string;
   note: string | null;
 }
 
 export interface CheckoutRequest {
-  team_context?: string;
+  project_context?: string;
   note?: string;
 }
 

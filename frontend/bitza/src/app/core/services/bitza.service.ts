@@ -8,10 +8,10 @@ import {
   BitzaCreate,
   BitzaListItem,
   BitzaListParams,
-  BitzaReassignTeamRequest,
+  BitzaReassignProjectRequest,
   BitzaRetireRequest,
   BitzaUpdate,
-  ReassignTeamResponse,
+  ReassignProjectResponse,
 } from '../models';
 
 @Service()
@@ -71,10 +71,10 @@ export class BitzaService {
   /**
    * `cascade_scope` is required and never defaulted by the backend — any
    * default shown in a picker is frontend UX only. See
-   * "Reassigning responsible team" in bitza_project_context.md.
+   * "Reassigning responsible project" in bitza_project_context.md.
    */
-  reassignTeam(id: string, request: BitzaReassignTeamRequest): Observable<ReassignTeamResponse> {
-    return this.http.post<ReassignTeamResponse>(`${this.baseUrl}/${id}/reassign-team`, request);
+  reassignProject(id: string, request: BitzaReassignProjectRequest): Observable<ReassignProjectResponse> {
+    return this.http.post<ReassignProjectResponse>(`${this.baseUrl}/${id}/reassign-project`, request);
   }
 
   /** Admin/superuser only; 409 if the bitza still has children. */

@@ -3,25 +3,25 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { TestBed } from '@angular/core/testing';
 import { firstValueFrom } from 'rxjs';
 import { environment } from '../../../environments/environment';
-import { TeamService } from './team.service';
+import { ProjectService } from './project.service';
 
-describe('TeamService', () => {
-  let service: TeamService;
+describe('ProjectService', () => {
+  let service: ProjectService;
   let httpMock: HttpTestingController;
 
   beforeEach(() => {
     TestBed.configureTestingModule({
       providers: [provideHttpClient(), provideHttpClientTesting()],
     });
-    service = TestBed.inject(TeamService);
+    service = TestBed.inject(ProjectService);
     httpMock = TestBed.inject(HttpTestingController);
   });
 
   afterEach(() => httpMock.verify());
 
-  it('lists all teams with no params', async () => {
+  it('lists all projects with no params', async () => {
     const promise = firstValueFrom(service.list());
-    const req = httpMock.expectOne(`${environment.apiUrl}/teams/`);
+    const req = httpMock.expectOne(`${environment.apiUrl}/projects/`);
     expect(req.request.method).toBe('GET');
     expect(req.request.params.keys().length).toBe(0);
     req.flush([{ id: 't1', name: 'Aero', member_count: 3 }]);
@@ -29,18 +29,18 @@ describe('TeamService', () => {
     expect(result[0].name).toBe('Aero');
   });
 
-  it('filters teams by user_id when provided', async () => {
+  it('filters projects by user_id when provided', async () => {
     const promise = firstValueFrom(service.list('u1'));
     const req = httpMock.expectOne(
-      (r) => r.url === `${environment.apiUrl}/teams/` && r.params.get('user_id') === 'u1',
+      (r) => r.url === `${environment.apiUrl}/projects/` && r.params.get('user_id') === 'u1',
     );
     req.flush([]);
     await promise;
   });
 
-  it('creates a team', async () => {
+  it('creates a project', async () => {
     const promise = firstValueFrom(service.create({ name: 'Battery', description: 'cells' }));
-    const req = httpMock.expectOne(`${environment.apiUrl}/teams/`);
+    const req = httpMock.expectOne(`${environment.apiUrl}/projects/`);
     expect(req.request.method).toBe('POST');
     expect(req.request.body).toEqual({ name: 'Battery', description: 'cells' });
     req.flush({
@@ -53,9 +53,9 @@ describe('TeamService', () => {
     await promise;
   });
 
-  it('deletes a team', async () => {
+  it('deletes a project', async () => {
     const promise = firstValueFrom(service.delete('t1'));
-    const req = httpMock.expectOne(`${environment.apiUrl}/teams/t1`);
+    const req = httpMock.expectOne(`${environment.apiUrl}/projects/t1`);
     expect(req.request.method).toBe('DELETE');
     req.flush(null);
     await promise;
@@ -63,13 +63,13 @@ describe('TeamService', () => {
 
   it('adds a member with the documented payload shape', async () => {
     const promise = firstValueFrom(service.addMember('t1', { user_id: 'u1', is_primary: true }));
-    const req = httpMock.expectOne(`${environment.apiUrl}/teams/t1/members`);
+    const req = httpMock.expectOne(`${environment.apiUrl}/projects/t1/members`);
     expect(req.request.method).toBe('POST');
     expect(req.request.body).toEqual({ user_id: 'u1', is_primary: true });
     req.flush({
       id: 'm1',
       user_id: 'u1',
-      team_id: 't1',
+      project_id: 't1',
       is_primary: true,
       user_display_name: 'Sam Smith',
     });
@@ -78,13 +78,13 @@ describe('TeamService', () => {
 
   it('sets primary via PATCH on the membership', async () => {
     const promise = firstValueFrom(service.setPrimary('t1', 'u1', false));
-    const req = httpMock.expectOne(`${environment.apiUrl}/teams/t1/members/u1`);
+    const req = httpMock.expectOne(`${environment.apiUrl}/projects/t1/members/u1`);
     expect(req.request.method).toBe('PATCH');
     expect(req.request.body).toEqual({ is_primary: false });
     req.flush({
       id: 'm1',
       user_id: 'u1',
-      team_id: 't1',
+      project_id: 't1',
       is_primary: false,
       user_display_name: 'Sam Smith',
     });
@@ -93,7 +93,7 @@ describe('TeamService', () => {
 
   it('removes a member', async () => {
     const promise = firstValueFrom(service.removeMember('t1', 'u1'));
-    const req = httpMock.expectOne(`${environment.apiUrl}/teams/t1/members/u1`);
+    const req = httpMock.expectOne(`${environment.apiUrl}/projects/t1/members/u1`);
     expect(req.request.method).toBe('DELETE');
     req.flush(null);
     await promise;
@@ -101,10 +101,10 @@ describe('TeamService', () => {
 
   it("fetches the current user's own memberships, including is_primary", async () => {
     const promise = firstValueFrom(service.listMine());
-    const req = httpMock.expectOne(`${environment.apiUrl}/teams/mine`);
+    const req = httpMock.expectOne(`${environment.apiUrl}/projects/mine`);
     expect(req.request.method).toBe('GET');
-    req.flush([{ team_id: 't1', team_name: 'Aero', is_primary: true }]);
+    req.flush([{ project_id: 't1', project_name: 'Aero', is_primary: true }]);
     const result = await promise;
-    expect(result[0]).toEqual({ team_id: 't1', team_name: 'Aero', is_primary: true });
+    expect(result[0]).toEqual({ project_id: 't1', project_name: 'Aero', is_primary: true });
   });
 });

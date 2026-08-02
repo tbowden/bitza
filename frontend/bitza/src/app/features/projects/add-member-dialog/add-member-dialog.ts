@@ -12,7 +12,7 @@ import { UserDirectoryEntry } from '../../../core/models';
 import { UserService } from '../../../core/services/user.service';
 
 export interface AddMemberDialogData {
-  /** user_ids already on the team, so they don't show up as pickable again. */
+  /** user_ids already on the project, so they don't show up as pickable again. */
   existingMemberUserIds: string[];
 }
 
@@ -72,7 +72,7 @@ export interface AddMemberResult {
         }
 
         <mat-checkbox [checked]="isPrimary()" (change)="isPrimary.set($event.checked)">
-          Make this their primary team
+          Make this their primary project
         </mat-checkbox>
       }
     </mat-dialog-content>

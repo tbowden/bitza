@@ -17,7 +17,7 @@ import { combineLatest, catchError, map, of, switchMap } from 'rxjs';
 import { AuthService } from '../../../core/services/auth.service';
 import { BitzaService } from '../../../core/services/bitza.service';
 import { CategoryService } from '../../../core/services/category.service';
-import { TeamService } from '../../../core/services/team.service';
+import { ProjectService } from '../../../core/services/project.service';
 import {
   Bitza,
   BitzaAncestor,
@@ -26,7 +26,7 @@ import {
   BitzaListParams,
   BitzaStatus,
   Category,
-  TeamListItem,
+  ProjectListItem,
 } from '../../../core/models';
 import { ConfirmDialog, ConfirmDialogData } from '../../../shared/confirm-dialog/confirm-dialog';
 import {
@@ -36,10 +36,10 @@ import {
 } from '../bitza-form-dialog/bitza-form-dialog';
 import { CategoryManagerDialog } from '../category-manager-dialog/category-manager-dialog';
 import {
-  ReassignTeamDialog,
-  ReassignTeamDialogData,
-  ReassignTeamResult,
-} from '../reassign-team-dialog/reassign-team-dialog';
+  ReassignProjectDialog,
+  ReassignProjectDialogData,
+  ReassignProjectResult,
+} from '../reassign-project-dialog/reassign-project-dialog';
 import { RetireDialog, RetireDialogResult } from '../retire-dialog/retire-dialog';
 import {
   MoveBitzaDialog,
@@ -110,7 +110,7 @@ import { ImageGallery } from '../image-gallery/image-gallery';
             }
             <p>
               Project responsible:
-              <strong>{{ bitza.responsible_team_name }}</strong>
+              <strong>{{ bitza.responsible_project_name }}</strong>
             </p>
             @if (bitza.category_id) {
               <p>Category: {{ bitza.category_name }}</p>
@@ -165,7 +165,7 @@ import { ImageGallery } from '../image-gallery/image-gallery';
               Label
             </button>
             @if (!bitza.is_root) {
-              <button mat-button type="button" (click)="onReassignTeam(bitza)">
+              <button mat-button type="button" (click)="onReassignProject(bitza)">
                 <mat-icon>swap_horiz</mat-icon>
                 Reassign project
               </button>
@@ -230,10 +230,10 @@ import { ImageGallery } from '../image-gallery/image-gallery';
 
         <mat-form-field appearance="outline" class="filter-field">
           <mat-label>Project</mat-label>
-          <mat-select [value]="filterTeamId()" (selectionChange)="filterTeamId.set($event.value)">
+          <mat-select [value]="filterProjectId()" (selectionChange)="filterProjectId.set($event.value)">
             <mat-option value="">All</mat-option>
-            @for (team of teams(); track team.id) {
-              <mat-option [value]="team.id">{{ team.name }}</mat-option>
+            @for (project of projects(); track project.id) {
+              <mat-option [value]="project.id">{{ project.name }}</mat-option>
             }
           </mat-select>
         </mat-form-field>
@@ -365,7 +365,7 @@ export class BitzaBrowser {
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   private readonly bitzaService = inject(BitzaService);
-  private readonly teamService = inject(TeamService);
+  private readonly projectService = inject(ProjectService);
   private readonly categoryService = inject(CategoryService);
   private readonly dialog = inject(MatDialog);
   private readonly snackBar = inject(MatSnackBar);
@@ -388,18 +388,18 @@ export class BitzaBrowser {
   protected readonly filterKind = signal<BitzaKind | ''>('');
   protected readonly filterStatus = signal<BitzaStatus | ''>('');
   protected readonly filterCategoryId = signal('');
-  protected readonly filterTeamId = signal('');
+  protected readonly filterProjectId = signal('');
 
   private readonly filtersBundle = computed(() => ({
     kind: this.filterKind() || undefined,
     status: this.filterStatus() || undefined,
     category_id: this.filterCategoryId() || undefined,
-    responsible_team_id: this.filterTeamId() || undefined,
+    responsible_project_id: this.filterProjectId() || undefined,
   }));
   private readonly filtersBundle$ = toObservable(this.filtersBundle);
 
-  protected readonly teams = toSignal(
-    this.teamService.list().pipe(catchError(() => of<TeamListItem[]>([]))),
+  protected readonly projects = toSignal(
+    this.projectService.list().pipe(catchError(() => of<ProjectListItem[]>([]))),
     { initialValue: [] },
   );
 
@@ -471,7 +471,7 @@ export class BitzaBrowser {
   protected onCreateChild(parent: Bitza): void {
     const data: BitzaFormDialogData = {
       parentId: parent.id,
-      defaultTeamId: parent.responsible_team_id,
+      defaultProjectId: parent.responsible_project_id,
     };
     const dialogRef = this.dialog.open(BitzaFormDialog, { width: '520px', data });
     dialogRef.afterClosed().subscribe((result?: BitzaFormResult) => {
@@ -551,18 +551,18 @@ export class BitzaBrowser {
     });
   }
 
-  protected onReassignTeam(bitza: Bitza): void {
-    const data: ReassignTeamDialogData = {
+  protected onReassignProject(bitza: Bitza): void {
+    const data: ReassignProjectDialogData = {
       kind: bitza.kind,
-      currentTeamId: bitza.responsible_team_id,
+      currentProjectId: bitza.responsible_project_id,
     };
-    const dialogRef = this.dialog.open(ReassignTeamDialog, { width: '480px', data });
-    dialogRef.afterClosed().subscribe((result?: ReassignTeamResult) => {
+    const dialogRef = this.dialog.open(ReassignProjectDialog, { width: '480px', data });
+    dialogRef.afterClosed().subscribe((result?: ReassignProjectResult) => {
       if (!result) {
         return;
       }
       this.bitzaService
-        .reassignTeam(bitza.id, { team_id: result.teamId, cascade_scope: result.cascadeScope })
+        .reassignProject(bitza.id, { project_id: result.projectId, cascade_scope: result.cascadeScope })
         .subscribe((response) => {
           this.reload.update((n) => n + 1);
           const count = response.updated_count;

@@ -16,7 +16,7 @@ import { Observable, catchError, firstValueFrom, map, of } from 'rxjs';
 import { CategoryService } from '../../../core/services/category.service';
 import { CheckoutService } from '../../../core/services/checkout.service';
 import { StockService } from '../../../core/services/stock.service';
-import { TeamService } from '../../../core/services/team.service';
+import { ProjectService } from '../../../core/services/project.service';
 import {
   Bitza,
   BitzaCreate,
@@ -27,7 +27,7 @@ import {
   FuzzyState,
   StockLog,
   StockMode,
-  TeamListItem,
+  ProjectListItem,
 } from '../../../core/models';
 import { ConfirmDialog, ConfirmDialogData } from '../../../shared/confirm-dialog/confirm-dialog';
 
@@ -40,8 +40,8 @@ export interface BitzaFormDialogData {
    * via the backend CLI, never through this dialog.
    */
   parentId?: string;
-  /** Pre-filled from the parent's own team, per the documented frontend responsibility. */
-  defaultTeamId?: string;
+  /** Pre-filled from the parent's own project, per the documented frontend responsibility. */
+  defaultProjectId?: string;
 }
 
 export type BitzaFormResult =
@@ -50,7 +50,7 @@ export type BitzaFormResult =
 interface BitzaFormModel {
   name: string;
   kind: BitzaKind;
-  responsible_team_id: string;
+  responsible_project_id: string;
   category_id: string;
   description: string;
   stock_mode: StockMode | '';
@@ -140,13 +140,13 @@ const STOCK_MODE_LABELS: Record<StockMode, string> = {
 
           <mat-form-field appearance="outline" class="full-width">
             <mat-label>Project responsible</mat-label>
-            <mat-select [formField]="bitzaForm.responsible_team_id">
-              @for (team of teams(); track team.id) {
-                <mat-option [value]="team.id">{{ team.name }}</mat-option>
+            <mat-select [formField]="bitzaForm.responsible_project_id">
+              @for (project of projects(); track project.id) {
+                <mat-option [value]="project.id">{{ project.name }}</mat-option>
               }
             </mat-select>
             @if (
-              bitzaForm.responsible_team_id().touched() && bitzaForm.responsible_team_id().invalid()
+              bitzaForm.responsible_project_id().touched() && bitzaForm.responsible_project_id().invalid()
             ) {
               <mat-error>Project is required.</mat-error>
             }
@@ -279,7 +279,7 @@ const STOCK_MODE_LABELS: Record<StockMode, string> = {
 export class BitzaFormDialog {
   protected readonly dialogRef = inject(MatDialogRef<BitzaFormDialog, BitzaFormResult>);
   protected readonly data = inject<BitzaFormDialogData>(MAT_DIALOG_DATA, { optional: true });
-  private readonly teamService = inject(TeamService);
+  private readonly projectService = inject(ProjectService);
   private readonly categoryService = inject(CategoryService);
   private readonly checkoutService = inject(CheckoutService);
   private readonly stockService = inject(StockService);
@@ -412,8 +412,8 @@ export class BitzaFormDialog {
     return mode ? STOCK_MODE_LABELS[mode] : '';
   });
 
-  protected readonly teams = toSignal(
-    this.teamService.list().pipe(catchError(() => of<TeamListItem[]>([]))),
+  protected readonly projects = toSignal(
+    this.projectService.list().pipe(catchError(() => of<ProjectListItem[]>([]))),
     {
       initialValue: [],
     },
@@ -427,7 +427,7 @@ export class BitzaFormDialog {
   protected readonly model = signal<BitzaFormModel>({
     name: this.data?.bitza?.name ?? '',
     kind: this.data?.bitza?.kind ?? 'fixed',
-    responsible_team_id: this.data?.bitza?.responsible_team_id ?? this.data?.defaultTeamId ?? '',
+    responsible_project_id: this.data?.bitza?.responsible_project_id ?? this.data?.defaultProjectId ?? '',
     category_id: this.data?.bitza?.category_id ?? '',
     description: this.data?.bitza?.description ?? '',
     stock_mode: this.data?.bitza?.stock_mode ?? '',
@@ -440,7 +440,7 @@ export class BitzaFormDialog {
 
   protected readonly bitzaForm = form(this.model, (path) => {
     required(path.name, { message: 'Name is required' });
-    required(path.responsible_team_id, { message: 'Responsible project is required' });
+    required(path.responsible_project_id, { message: 'Responsible project is required' });
 
     applyWhen(
       path,
@@ -476,7 +476,7 @@ export class BitzaFormDialog {
         if (this.isRootBitza) {
           // Every other field is hidden above, but the model still
           // carries their prefilled defaults (e.g. the existing
-          // responsible_team_id) — sending those as unchanged values
+          // responsible_project_id) — sending those as unchanged values
           // would still trip the "only name" guard on the backend, so
           // this is built by hand rather than reusing the general
           // update object below.
@@ -486,7 +486,7 @@ export class BitzaFormDialog {
 
         const update: BitzaUpdate = {
           name: value.name,
-          responsible_team_id: value.responsible_team_id,
+          responsible_project_id: value.responsible_project_id,
           category_id: value.category_id || null,
           description: value.description || null,
           vendor: value.vendor || undefined,
@@ -546,7 +546,7 @@ export class BitzaFormDialog {
         name: value.name,
         kind: value.kind,
         parent_id: parentId,
-        responsible_team_id: value.responsible_team_id,
+        responsible_project_id: value.responsible_project_id,
         category_id: value.category_id || undefined,
         description: value.description || undefined,
       };

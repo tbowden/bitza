@@ -21,8 +21,8 @@ import { CheckoutDialog } from '../checkout-dialog/checkout-dialog';
       } @else if (currentCheckout(); as checkout) {
         <p>
           Checked out by <strong>{{ checkout.holder_display_name }}</strong>
-          @if (checkout.team_context) {
-            for <strong>{{ checkout.team_context }}</strong>
+          @if (checkout.project_context) {
+            for <strong>{{ checkout.project_context }}</strong>
           }
           since {{ checkout.checked_out_at | date: 'medium' }}.
         </p>
@@ -47,8 +47,8 @@ import { CheckoutDialog } from '../checkout-dialog/checkout-dialog';
           @for (entry of pastCheckouts(); track entry.id) {
             <li>
               {{ entry.holder_display_name }}
-              @if (entry.team_context) {
-                — {{ entry.team_context }}
+              @if (entry.project_context) {
+                — {{ entry.project_context }}
               }
               : {{ entry.checked_out_at | date: 'short' }} →
               {{ entry.checked_in_at | date: 'short' }}
