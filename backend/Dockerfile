@@ -9,12 +9,12 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 WORKDIR /app
 
 # Copy dependency manifest first (layer-cache friendly).
-COPY pyproject.toml .python-version ./
+COPY pyproject.toml .python-version uv.lock ./
 
 # Install production dependencies only into /app/.venv.
 # --frozen: fail if uv.lock is out of date (ensures reproducible builds).
 # --no-install-project: install deps without the project itself at this stage.
-RUN uv sync --frozen --no-install-project --no-group dev
+RUN uv sync --locked --no-install-project --no-group dev
 
 
 # ---------------------------------------------------------------------------
