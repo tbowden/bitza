@@ -9,7 +9,7 @@ etc. Auth and JWT sections apply only when authentication is required.
 
 ## 1. Core technology stack (MANDATORY)
 
-- Python 3.12+ managed by **uv** (see Section 12)
+- Python 3.14+ managed by **uv** (see Section 12)
 - FastAPI (latest stable)
 - SQLAlchemy 2.x — **synchronous DB access only** (see Section 9 for when async is appropriate)
 - Pydantic v2
@@ -437,7 +437,7 @@ Use **uv** for all Python version and environment management. Never use pip,
 venv, or virtualenv directly.
 
 Required files:
-- `.python-version` — pins Python version (e.g. `3.12`)
+- `.python-version` — pins Python version (e.g. `3.14`)
 - `pyproject.toml` — single source of truth for dependencies and tooling config
 - `uv.lock` — reproducible lockfile; **must be committed to version control**
 
@@ -447,7 +447,7 @@ Required files:
 [project]
 name = "<project>"
 version = "0.1.0"
-requires-python = ">=3.12"
+requires-python = ">=3.14"
 dependencies = [
     # runtime deps here
 ]
@@ -466,7 +466,7 @@ line-length = 100
 target-version = "py312"
 
 [tool.mypy]
-python_version = "3.12"
+python_version = "3.14"
 strict = false
 ignore_missing_imports = true
 
@@ -602,7 +602,7 @@ APP_ENV=test uv run pytest --cov=app --cov-report=term-missing
 - Run as a non-root user
 - Mount `data/` as a named Docker volume for SQLite persistence
 - Set `ENV PATH="/app/.venv/bin:$PATH"` and `ENV PYTHONUNBUFFERED=1`
-- Use `python:3.12-slim` as the base image
+- Use `python:3.14-slim` as the base image
 
 ### CORS
 

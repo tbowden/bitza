@@ -46,7 +46,7 @@ cd bitza/backend
 uv sync --group dev
 ```
 
-uv reads `.python-version` (Python 3.12) and `pyproject.toml` automatically
+uv reads `.python-version` (Python 3.14) and `pyproject.toml` automatically
 and creates a `.venv` directory. You never need to activate it manually.
 
 ### 3. Configure the environment

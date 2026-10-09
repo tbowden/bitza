@@ -18,7 +18,7 @@ electronic components, tools, and other items stored across named locations.
 | Auth | JWT (python-jose) + bcrypt + zxcvbn |
 | Migrations | Alembic |
 | Tests | pytest + httpx TestClient |
-| Runtime | Python 3.12+ managed by uv |
+| Runtime | Python 3.14+ managed by uv |
 
 ---
 

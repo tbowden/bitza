@@ -2,7 +2,7 @@
 name = "bitza"
 version = "0.1.11"
 description = "Bitza asset management API"
-requires-python = ">=3.12"
+requires-python = ">=3.14"
 dependencies = [
     # Core framework
     "fastapi>=0.111.0",
@@ -78,7 +78,7 @@ ignore = ["E501"]
 # ---------------------------------------------------------------------------
 
 [tool.mypy]
-python_version = "3.12"
+python_version = "3.14"
 strict = false
 ignore_missing_imports = true
 
