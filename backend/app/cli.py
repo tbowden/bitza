@@ -134,6 +134,7 @@ def create_root() -> None:
     from app.db.session import SessionLocal
     from app.models.project import Project
     from app.repositories.audit_repository import AuditRepository
+    from app.repositories.bitza_document_repository import BitzaDocumentRepository
     from app.repositories.bitza_image_repository import BitzaImageRepository
     from app.repositories.bitza_repository import BitzaRepository
     from app.repositories.category_repository import CategoryRepository
@@ -155,6 +156,7 @@ def create_root() -> None:
             checkout_repo=CheckoutRepository(db),
             stock_log_repo=StockLogRepository(db),
             image_repo=BitzaImageRepository(db),
+            document_repo=BitzaDocumentRepository(db),
             audit_repo=AuditRepository(db),
             system_config_repo=SystemConfigRepository(db),
         )

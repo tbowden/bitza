@@ -44,6 +44,11 @@ class Settings(BaseSettings):
     # File uploads — stored on the server filesystem, path recorded in DB.
     # -------------------------------------------------------------------------
     UPLOAD_DIR: str = "./data/uploads"
+    # Per-file cap for bitza documents (datasheets, SDS, manuals). Images keep
+    # their own fixed 10 MB cap. Datasheet/reference-manual PDFs for modern
+    # MCUs can run to tens of MB. If a reverse proxy sits in front of the API,
+    # its own body-size limit (e.g. nginx client_max_body_size) must be >= this.
+    MAX_DOCUMENT_BYTES: int = 50 * 1024 * 1024
     model_config = SettingsConfigDict(
         # Load the environment-specific .env file (e.g. .env.prod)
         env_file=f".env.{_APP_ENV}",

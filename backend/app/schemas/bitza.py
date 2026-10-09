@@ -1,9 +1,17 @@
 from datetime import datetime
 from typing import Optional
+from urllib.parse import urlparse
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from app.models.bitza import BitzaKind, BitzaStatus, FuzzyState, RetiredReason, StockMode
+from app.models.bitza import (
+    BitzaKind,
+    BitzaStatus,
+    DocumentType,
+    FuzzyState,
+    RetiredReason,
+    StockMode,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -402,3 +410,72 @@ class BitzaImageRead(BaseModel):
 
 class BitzaImageSetPrimary(BaseModel):
     is_primary: bool
+
+
+# ---------------------------------------------------------------------------
+# Documents (datasheets, SDS/MSDS, manuals)
+# ---------------------------------------------------------------------------
+
+class _DocumentMetadata(BaseModel):
+    """
+    Shared by create and update. Every field is optional. Blank strings
+    (what an HTML form sends for an untouched input) are normalised to None.
+
+    source_url must be http(s): it will eventually be rendered as a link,
+    and a stored javascript:/data: URL is exactly what that must not allow.
+    """
+
+    model_config = ConfigDict(use_enum_values=True)
+
+    doc_type: Optional[DocumentType] = None
+    title: Optional[str] = Field(None, max_length=200)
+    source_url: Optional[str] = Field(None, max_length=2000)
+    note: Optional[str] = Field(None, max_length=2000)
+
+    @field_validator("doc_type", "title", "source_url", "note", mode="before")
+    @classmethod
+    def _blank_to_none(cls, v):
+        if isinstance(v, str):
+            v = v.strip()
+            return v or None
+        return v
+
+    @field_validator("source_url")
+    @classmethod
+    def _http_url_only(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return v
+        parsed = urlparse(v)
+        if parsed.scheme not in ("http", "https") or not parsed.netloc:
+            raise ValueError("source_url must be an http:// or https:// URL")
+        return v
+
+
+class BitzaDocumentCreate(_DocumentMetadata):
+    """Metadata sent alongside the uploaded file (as multipart form fields)."""
+
+
+class BitzaDocumentUpdate(_DocumentMetadata):
+    """
+    PATCH body. Only fields actually present in the request are applied,
+    and an explicit null (or blank string) clears the field — the service
+    reads model_fields_set to tell "omitted" from "set to null".
+    """
+
+
+class BitzaDocumentRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    bitza_id: str
+    doc_type: Optional[str]
+    title: Optional[str]
+    source_url: Optional[str]
+    note: Optional[str]
+    original_filename: Optional[str]
+    content_type: Optional[str]
+    size_bytes: int
+    sha256: Optional[str]
+    uploaded_by: Optional[str]
+    uploaded_by_display_name: str = ""   # populated by service
+    uploaded_at: datetime

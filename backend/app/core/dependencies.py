@@ -6,6 +6,7 @@ from app.core.exceptions import UserNotFoundError, UserSuspendedError
 from app.db.session import get_db
 from app.models.user import User
 from app.repositories.audit_repository import AuditRepository
+from app.repositories.bitza_document_repository import BitzaDocumentRepository
 from app.repositories.bitza_image_repository import BitzaImageRepository
 from app.repositories.bitza_repository import BitzaRepository
 from app.repositories.category_repository import CategoryRepository
@@ -63,6 +64,10 @@ def get_bitza_image_repository(db: Session = Depends(get_db)) -> BitzaImageRepos
     return BitzaImageRepository(db)
 
 
+def get_bitza_document_repository(db: Session = Depends(get_db)) -> BitzaDocumentRepository:
+    return BitzaDocumentRepository(db)
+
+
 def get_audit_repository(db: Session = Depends(get_db)) -> AuditRepository:
     return AuditRepository(db)
 
@@ -115,6 +120,7 @@ def get_bitza_service(
     checkout_repo: CheckoutRepository = Depends(get_checkout_repository),
     stock_log_repo: StockLogRepository = Depends(get_stock_log_repository),
     image_repo: BitzaImageRepository = Depends(get_bitza_image_repository),
+    document_repo: BitzaDocumentRepository = Depends(get_bitza_document_repository),
     audit_repo: AuditRepository = Depends(get_audit_repository),
     system_config_repo: SystemConfigRepository = Depends(get_system_config_repository),
 ) -> BitzaService:
@@ -127,6 +133,7 @@ def get_bitza_service(
         checkout_repo=checkout_repo,
         stock_log_repo=stock_log_repo,
         image_repo=image_repo,
+        document_repo=document_repo,
         audit_repo=audit_repo,
         system_config_repo=system_config_repo,
     )

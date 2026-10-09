@@ -2,7 +2,9 @@ import mimetypes
 from typing import Optional
 
 from fastapi import APIRouter, Depends, File, Form, Query, UploadFile, status
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse
+from pydantic import ValidationError
 
 from app.core.dependencies import get_bitza_service, get_current_user
 from app.models.bitza import BitzaKind, BitzaStatus
@@ -10,6 +12,9 @@ from app.models.user import User
 from app.schemas.bitza import (
     BitzaAncestorRead,
     BitzaCreate,
+    BitzaDocumentCreate,
+    BitzaDocumentRead,
+    BitzaDocumentUpdate,
     BitzaImageRead,
     BitzaListRead,
     BitzaRead,
@@ -457,6 +462,115 @@ def delete_image(
     """If the deleted image was primary and others remain, the oldest
     remaining image is automatically promoted to primary."""
     svc.delete_image(bitza_id=bitza_id, image_id=image_id)
+
+
+# ---------------------------------------------------------------------------
+# Documents (datasheets, SDS/MSDS, manuals)
+# ---------------------------------------------------------------------------
+
+@bitzas_router.get(
+    "/{bitza_id}/documents",
+    response_model=list[BitzaDocumentRead],
+    summary="List a bitza's documents (metadata only — fetch each file separately)",
+)
+def list_documents(
+    bitza_id: str,
+    current_user: User = Depends(get_current_user),
+    svc: BitzaService = Depends(get_bitza_service),
+) -> list[BitzaDocumentRead]:
+    return svc.list_documents(bitza_id=bitza_id)
+
+
+@bitzas_router.post(
+    "/{bitza_id}/documents",
+    response_model=BitzaDocumentRead,
+    status_code=status.HTTP_201_CREATED,
+    summary="Upload a document (datasheet, SDS/MSDS, manual) for a bitza",
+)
+async def upload_document(
+    bitza_id: str,
+    file: UploadFile = File(...),
+    doc_type: Optional[str] = Form(None),
+    title: Optional[str] = Form(None),
+    source_url: Optional[str] = Form(None),
+    note: Optional[str] = Form(None),
+    current_user: User = Depends(get_current_user),
+    svc: BitzaService = Depends(get_bitza_service),
+) -> BitzaDocumentRead:
+    """Multipart upload: the file, plus optional form fields doc_type
+    (datasheet | sds | manual | other), title, source_url (http/https) and
+    note. Any file type is accepted for now; size is capped by the
+    MAX_DOCUMENT_BYTES setting (default 50 MB)."""
+    # Validated through the schema (rather than typed on the parameters) so
+    # blank strings are normalised and the rules live in one place, shared
+    # with PATCH.
+    try:
+        metadata = BitzaDocumentCreate(
+            doc_type=doc_type, title=title, source_url=source_url, note=note
+        )
+    except ValidationError as exc:
+        raise RequestValidationError(
+            [
+                {**err, "loc": ("body", *err["loc"])}
+                for err in exc.errors(include_url=False, include_context=False)
+            ]
+        ) from exc
+    return await svc.upload_document(
+        bitza_id=bitza_id, file=file, data=metadata, actor=current_user
+    )
+
+
+@bitzas_router.get(
+    "/{bitza_id}/documents/{document_id}",
+    summary="Download a document's file",
+)
+def download_document(
+    bitza_id: str,
+    document_id: str,
+    current_user: User = Depends(get_current_user),
+    svc: BitzaService = Depends(get_bitza_service),
+) -> FileResponse:
+    """Always served as an attachment with nosniff, since the content type
+    is not yet verified against the file's contents."""
+    abs_path, download_name, media_type = svc.get_document_file(
+        bitza_id=bitza_id, document_id=document_id
+    )
+    return FileResponse(
+        abs_path,
+        media_type=media_type,
+        filename=download_name,
+        headers={"X-Content-Type-Options": "nosniff"},
+    )
+
+
+@bitzas_router.patch(
+    "/{bitza_id}/documents/{document_id}",
+    response_model=BitzaDocumentRead,
+    summary="Edit a document's metadata (doc_type, title, source_url, note)",
+)
+def update_document(
+    bitza_id: str,
+    document_id: str,
+    data: BitzaDocumentUpdate,
+    current_user: User = Depends(get_current_user),
+    svc: BitzaService = Depends(get_bitza_service),
+) -> BitzaDocumentRead:
+    """Only fields present in the body are changed; send null to clear one."""
+    return svc.update_document(bitza_id=bitza_id, document_id=document_id, data=data)
+
+
+@bitzas_router.delete(
+    "/{bitza_id}/documents/{document_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Delete a document and its file",
+)
+def delete_document(
+    bitza_id: str,
+    document_id: str,
+    current_user: User = Depends(get_current_user),
+    svc: BitzaService = Depends(get_bitza_service),
+) -> None:
+    svc.delete_document(bitza_id=bitza_id, document_id=document_id)
 
 
 # ---------------------------------------------------------------------------

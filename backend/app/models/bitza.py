@@ -167,6 +167,10 @@ class Bitza(Base):
     images: Mapped[list["BitzaImage"]] = relationship(
         "BitzaImage", back_populates="bitza", cascade="all, delete-orphan"
     )
+    documents: Mapped[list["BitzaDocument"]] = relationship(
+        "BitzaDocument", back_populates="bitza", cascade="all, delete-orphan",
+        order_by="BitzaDocument.uploaded_at",
+    )
     checkouts: Mapped[list["Checkout"]] = relationship(
         "Checkout", back_populates="bitza", cascade="all, delete-orphan",
         order_by="Checkout.checked_out_at",
@@ -201,6 +205,64 @@ class BitzaImage(Base):
     uploaded_at: Mapped[datetime] = mapped_column(UTCDateTime, nullable=False, default=_utcnow)
 
     bitza: Mapped["Bitza"] = relationship("Bitza", back_populates="images")
+
+
+class DocumentType(str, enum.Enum):
+    """
+    Optional label for a BitzaDocument. Stored as a plain string column
+    (not a DB enum) and validated at the schema layer, so adding a value
+    later needs no migration.
+
+    sds — Safety Data Sheet (formerly MSDS).
+    """
+
+    datasheet = "datasheet"
+    sds = "sds"
+    manual = "manual"
+    other = "other"
+
+
+class BitzaDocument(Base):
+    """
+    A reference document (datasheet, SDS/MSDS, manual, ...) attached to a
+    Bitza — expected to be PDF in practice, but nothing here depends on it.
+
+    Like BitzaImage, the file itself lives on the server filesystem under
+    settings.UPLOAD_DIR and the DB records only its relative path. Keeping
+    the two in step (orphaned files, missing files) is an admin-side
+    concern, not something the app polices at runtime — see
+    bitza_open_issues.md.
+
+    Every descriptive field is optional. original_filename, content_type,
+    size_bytes and sha256 are facts about the uploaded file, captured at
+    upload time; content_type is whatever the client claimed (it is NOT
+    yet verified against the file's contents). title / doc_type /
+    source_url / note are user-supplied and editable afterwards.
+    """
+
+    __tablename__ = "bitza_documents"
+
+    id: Mapped[str] = mapped_column(
+        String(36), primary_key=True, default=lambda: str(uuid.uuid4())
+    )
+    bitza_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("bitzas.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    file_path: Mapped[str] = mapped_column(String(500), nullable=False)
+    doc_type: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    title: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    source_url: Mapped[str | None] = mapped_column(String(2000), nullable=True)
+    note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    original_filename: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    content_type: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    size_bytes: Mapped[int] = mapped_column(Integer, nullable=False)
+    sha256: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    uploaded_by: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    uploaded_at: Mapped[datetime] = mapped_column(UTCDateTime, nullable=False, default=_utcnow)
+
+    bitza: Mapped["Bitza"] = relationship("Bitza", back_populates="documents")
 
 
 class Checkout(Base):

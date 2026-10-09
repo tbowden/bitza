@@ -499,6 +499,47 @@ Angular clients must fetch image files via `HttpClient` with
 not send the Authorization header, and there's no unauthenticated static
 path for these files.
 
+### Documents (datasheets, SDS/MSDS, manuals) — Stage 7
+
+A bitza of any kind may have any number of reference documents (expected to
+be PDFs, e.g. component datasheets for stock items, SDS/MSDS for chemicals).
+Same storage model as images: the **file lives on the filesystem** under
+`UPLOAD_DIR` (`bitzas/{bitza_id}/documents/{uuid}{ext}`) and the DB row
+(`bitza_documents`) records only the relative path plus metadata. Keeping DB
+and filesystem in step (orphaned/missing files) is a separate admin-side
+process, deliberately not policed by the app at runtime.
+
+```
+GET    /api/v1/bitzas/{id}/documents               metadata list, oldest first
+POST   /api/v1/bitzas/{id}/documents               multipart: file + optional doc_type/title/source_url/note → 201
+GET    /api/v1/bitzas/{id}/documents/{doc_id}      the file (authenticated; always attachment + nosniff)
+PATCH  /api/v1/bitzas/{id}/documents/{doc_id}      {doc_type?, title?, source_url?, note?}; null/blank clears a field
+DELETE /api/v1/bitzas/{id}/documents/{doc_id}      removes the row, then the file → 204
+```
+
+- **All descriptive metadata is optional.** `doc_type` is one of `datasheet |
+  sds | manual | other` (plain string column, validated in the schema, so new
+  values need no migration). `source_url` (the original download URL) must be
+  http(s). Facts captured at upload and not editable: `original_filename`
+  (path components stripped), `content_type`, `size_bytes`, `sha256`.
+- **Uploads stream to disk in 1 MB chunks** and are capped by
+  `MAX_DOCUMENT_BYTES` (default 50 MB, env-configurable; any reverse proxy's
+  body limit must be at least that). Empty files are rejected. A partial file
+  is removed on any failure, including a failed DB write.
+- **Permissions follow images:** any authenticated user may upload, edit or
+  delete. No audit-log entries (also like images).
+- **Hard-deleting a bitza deletes its document files** (after the DB commit).
+  Image files are *not* cleaned up on bitza delete — pre-existing gap.
+- **Content type is NOT verified.** It is whatever the client claimed. The
+  mitigations in place are attachment disposition, `nosniff`, http(s)-only
+  `source_url`, and the extension on disk being restricted to short
+  alphanumeric suffixes. Real file-type sanity checking (magic bytes etc.) is
+  planned as separate follow-up work; the natural hook is
+  `BitzaService.upload_document`, before the DB row is created.
+- **Frontend: not built yet** (backend-first; usable via the Swagger UI at
+  `/docs` in the meantime). As with images, a future Angular client must
+  fetch the file via `HttpClient` + blob.
+
 ### Acquisition / provenance
 
 `purchased_by_user_id` doubles as "added by" — the project deliberately

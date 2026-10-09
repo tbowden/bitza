@@ -3,7 +3,9 @@
 **Status: Stage 6 is complete.** Backend `Team` → `Project` rename shipped
 across two reviewed patches (backend, then frontend — see the "Stage 6
 (complete)" section below for what was actually decided and delivered).
-**No Stage 7 is scoped yet.** For full project orientation start at
+**Stage 7 is in progress** — see the "Stage 7" section below (document
+attachments; backend done, frontend and file-type checking deferred). For
+full project orientation start at
 `bitza_context_restoration.md`; for the backend architecture these items
 touch, see `bitza_project_context.md`.
 
@@ -78,9 +80,42 @@ with its full test suite green before being applied.
 
 ---
 
-## Stage 7 — not yet defined
+## Stage 7 — document attachments (datasheets / SDS) — backend done
 
-Nothing is scoped here yet. The backlog items below are scattered
+**Goal:** attach a data/spec sheet or SDS/MSDS (mostly PDF) to a bitza —
+chiefly stock items such as electronic components — so real data can start
+going in.
+
+**Decided:** metadata all optional (including the original URL); files on the
+filesystem with the path in the DB, as for images; DB/filesystem sync is a
+later admin-side process; backend first, frontend later; upload file-type
+sanity checking is separate later work. Full contract in
+`bitza_project_context.md` ("Documents").
+
+**Backend delivered:** migration `0005_bitza_documents`, `BitzaDocument` model,
+`BitzaDocumentRepository`, upload/list/download/PATCH/delete in
+`BitzaService` + five endpoints, `MAX_DOCUMENT_BYTES` setting,
+`tests/test_documents.py`. 212 backend tests green (166 + 46 new); the
+migration was checked with `alembic check` (no drift) and a downgrade/upgrade
+round-trip.
+
+**Still to do for Stage 7:**
+- **Frontend**: model, service, and a documents section on the bitza detail
+  page (upload, list, download via blob fetch, edit metadata, delete). Avoid
+  the visually-hidden-input pattern the image gallery uses for the new
+  upload control (axe has never been run on it).
+- **File-type sanity checking** on upload (magic bytes vs claimed type).
+- **DB↔filesystem sync tooling** for admins (orphaned files, missing files;
+  the stored `sha256` allows integrity checks).
+- Known related gaps: image files are not removed when a bitza is hard
+  deleted; documents/images live in the same volume as the DB but the
+  documented backup copies only the `.db` file.
+
+---
+
+## Backlog (not scheduled)
+
+The backlog items below are scattered
 mentions from the other context docs (`bitza_frontend_context.md`'s
 "Deliberately out of scope / deferred" section, `bitza_project_context.md`'s
 "Still genuinely open" note) — informational, not a commitment to any of

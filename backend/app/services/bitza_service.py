@@ -1,3 +1,7 @@
+import contextlib
+import hashlib
+import mimetypes
+import re
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -17,6 +21,7 @@ from app.models.audit import AuditLog
 from app.models.category import Category
 from app.models.bitza import (
     Bitza,
+    BitzaDocument,
     BitzaImage,
     BitzaKind,
     BitzaStatus,
@@ -26,6 +31,7 @@ from app.models.bitza import (
 )
 from app.models.user import User, UserRole
 from app.repositories.audit_repository import AuditRepository
+from app.repositories.bitza_document_repository import BitzaDocumentRepository
 from app.repositories.bitza_image_repository import BitzaImageRepository
 from app.repositories.bitza_repository import BitzaRepository
 from app.repositories.category_repository import CategoryRepository
@@ -39,6 +45,9 @@ from app.schemas.category import CategoryCreate, CategoryRead, CategoryUpdate
 from app.schemas.bitza import (
     BitzaAncestorRead,
     BitzaCreate,
+    BitzaDocumentCreate,
+    BitzaDocumentRead,
+    BitzaDocumentUpdate,
     BitzaImageRead,
     BitzaListRead,
     BitzaRead,
@@ -59,6 +68,27 @@ settings = get_settings()
 _ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/gif", "image/webp"}
 _MAX_IMAGE_BYTES = 10 * 1024 * 1024  # 10 MB
 
+_DOCUMENT_CHUNK_BYTES = 1024 * 1024  # stream uploads to disk 1 MB at a time
+_SAFE_EXTENSION = re.compile(r"\.[a-z0-9]{1,10}")
+
+
+def _clean_filename(name: Optional[str]) -> Optional[str]:
+    """Client-supplied filename -> something safe to store and display:
+    no directory components, no control characters, at most 255 chars."""
+    if not name:
+        return None
+    name = name.replace("\\", "/").rsplit("/", 1)[-1]
+    name = "".join(ch for ch in name if ch.isprintable()).strip()
+    return name[:255] or None
+
+
+def _safe_extension(filename: Optional[str]) -> str:
+    """Extension for the on-disk name. Only short alphanumeric suffixes are
+    kept — anything odd becomes no extension rather than something that
+    could be abused as part of a path."""
+    suffix = Path(filename).suffix.lower() if filename else ""
+    return suffix if _SAFE_EXTENSION.fullmatch(suffix) else ""
+
 
 def _not_found(msg: str) -> HTTPException:
     return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=msg)
@@ -71,7 +101,7 @@ def _utcnow() -> datetime:
 class BitzaService:
     """
     Business logic for the unified Bitza tree, plus its satellite records
-    (images, checkouts, stock logs).
+    (images, documents, checkouts, stock logs).
 
     Permission philosophy (see bitza_project_context.md): any authenticated
     user may create, edit, move, retire/reactivate, check out/in, and
@@ -95,6 +125,7 @@ class BitzaService:
         checkout_repo: CheckoutRepository,
         stock_log_repo: StockLogRepository,
         image_repo: BitzaImageRepository,
+        document_repo: BitzaDocumentRepository,
         audit_repo: AuditRepository,
         system_config_repo: SystemConfigRepository,
     ) -> None:
@@ -106,6 +137,7 @@ class BitzaService:
         self._checkouts = checkout_repo
         self._stock_logs = stock_log_repo
         self._images = image_repo
+        self._documents = document_repo
         self._audit = audit_repo
         self._system_config = system_config_repo
 
@@ -512,8 +544,12 @@ class BitzaService:
                 "Move or delete them first."
             )
         self._write_audit("bitza", bitza_id, "DELETE", actor.id, f"Deleted '{bitza.name}'")
+        document_paths = [d.file_path for d in self._documents.list_for_bitza(bitza_id)]
         self._bitzas.delete(bitza)
         self._db.commit()
+        # Files go only after the commit succeeds: a failure above leaves
+        # the rows and files intact, rather than rows pointing at nothing.
+        self._remove_document_files(bitza_id, document_paths)
 
     # ------------------------------------------------------------------
     # Retire / reactivate — freely settable by any user, not a workflow
@@ -854,6 +890,159 @@ class BitzaService:
         self._db.commit()
 
     # ------------------------------------------------------------------
+    # Documents (datasheets, SDS/MSDS, manuals)
+    #
+    # Same storage model as images — file on disk under UPLOAD_DIR, path in
+    # the DB — and the same permission model: any authenticated user may
+    # upload, edit or delete. Unlike images, uploads are streamed to disk in
+    # chunks (datasheets can be large) and the file's size and SHA-256 are
+    # recorded. What is NOT done yet: the content type is the client's claim
+    # and is not verified against the bytes — planned as separate work.
+    # ------------------------------------------------------------------
+
+    async def upload_document(
+        self,
+        bitza_id: str,
+        file: UploadFile,
+        data: BitzaDocumentCreate,
+        actor: User,
+    ) -> BitzaDocumentRead:
+        if not self._bitzas.get(bitza_id):
+            raise _not_found("Bitza not found")
+
+        original_filename = _clean_filename(file.filename)
+        content_type = (file.content_type or "").split(";")[0].strip().lower()[:100]
+        if not content_type and original_filename:
+            content_type = mimetypes.guess_type(original_filename)[0] or ""
+
+        rel_path = (
+            f"bitzas/{bitza_id}/documents/"
+            f"{uuid.uuid4().hex}{_safe_extension(original_filename)}"
+        )
+        abs_path = Path(settings.UPLOAD_DIR) / rel_path
+        size_bytes, sha256 = await self._stream_upload_to_disk(file, abs_path)
+
+        try:
+            document = BitzaDocument(
+                id=str(uuid.uuid4()),
+                bitza_id=bitza_id,
+                file_path=rel_path,
+                doc_type=data.doc_type,
+                title=data.title,
+                source_url=data.source_url,
+                note=data.note,
+                original_filename=original_filename,
+                content_type=content_type or None,
+                size_bytes=size_bytes,
+                sha256=sha256,
+                uploaded_by=actor.id,
+            )
+            created = self._documents.create(document)
+            self._db.commit()
+        except Exception:
+            # Don't leave an unreferenced file behind if the DB write fails.
+            abs_path.unlink(missing_ok=True)
+            raise
+        return self._enrich_document(created)
+
+    def list_documents(self, bitza_id: str) -> list[BitzaDocumentRead]:
+        if not self._bitzas.get(bitza_id):
+            raise _not_found("Bitza not found")
+        return [self._enrich_document(d) for d in self._documents.list_for_bitza(bitza_id)]
+
+    def get_document_file(self, bitza_id: str, document_id: str) -> tuple[str, str, str]:
+        """Returns (absolute path, download filename, media type)."""
+        document = self._get_document_or_404(bitza_id, document_id)
+        abs_path = self._document_abs_path(document.file_path)
+        if not abs_path.is_file():
+            raise _not_found("Document file not found")
+        download_name = document.original_filename or abs_path.name
+        media_type = (
+            document.content_type
+            or mimetypes.guess_type(download_name)[0]
+            or "application/octet-stream"
+        )
+        return str(abs_path), download_name, media_type
+
+    def update_document(
+        self, bitza_id: str, document_id: str, data: BitzaDocumentUpdate
+    ) -> BitzaDocumentRead:
+        document = self._get_document_or_404(bitza_id, document_id)
+        # model_fields_set, not "is not None": PATCH must be able to clear a
+        # field (e.g. remove a stale source_url) as well as change it.
+        for field in data.model_fields_set:
+            setattr(document, field, getattr(data, field))
+        updated = self._documents.update(document)
+        self._db.commit()
+        return self._enrich_document(updated)
+
+    def delete_document(self, bitza_id: str, document_id: str) -> None:
+        document = self._get_document_or_404(bitza_id, document_id)
+        file_path = document.file_path
+        self._documents.delete(document)
+        self._db.commit()
+        self._remove_document_files(None, [file_path])
+
+    # -- document helpers ----------------------------------------------
+
+    def _get_document_or_404(self, bitza_id: str, document_id: str) -> BitzaDocument:
+        document = self._documents.get(document_id)
+        if not document or document.bitza_id != bitza_id:
+            raise _not_found("Document not found")
+        return document
+
+    @staticmethod
+    def _document_abs_path(rel_path: str) -> Path:
+        """Resolve a stored relative path, refusing anything that escapes
+        UPLOAD_DIR (defence in depth: paths are generated by this service,
+        but the DB is also touched by admin tooling)."""
+        root = Path(settings.UPLOAD_DIR).resolve()
+        resolved = (root / rel_path).resolve()
+        if not resolved.is_relative_to(root):
+            raise _not_found("Document file not found")
+        return resolved
+
+    async def _stream_upload_to_disk(self, file: UploadFile, abs_path: Path) -> tuple[int, str]:
+        """Write the upload to abs_path in chunks, enforcing the size cap
+        without ever holding the whole file in memory. Returns
+        (size_bytes, sha256 hex). A partial file is removed on any failure."""
+        max_bytes = settings.MAX_DOCUMENT_BYTES
+        digest = hashlib.sha256()
+        size = 0
+        abs_path.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            with abs_path.open("wb") as out:
+                while chunk := await file.read(_DOCUMENT_CHUNK_BYTES):
+                    size += len(chunk)
+                    if size > max_bytes:
+                        raise HTTPException(
+                            status_code=status.HTTP_413_CONTENT_TOO_LARGE,
+                            detail=f"Document exceeds the {max_bytes // (1024 * 1024)} MB limit",
+                        )
+                    digest.update(chunk)
+                    out.write(chunk)
+            if size == 0:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                    detail="Uploaded file is empty",
+                )
+        except BaseException:
+            abs_path.unlink(missing_ok=True)
+            raise
+        return size, digest.hexdigest()
+
+    def _remove_document_files(self, bitza_id: Optional[str], rel_paths: list[str]) -> None:
+        """Best-effort removal after the DB commit. A failure here leaves an
+        orphaned file (an admin-sync matter), never a dangling DB row."""
+        for rel_path in rel_paths:
+            with contextlib.suppress(OSError, HTTPException):
+                self._document_abs_path(rel_path).unlink(missing_ok=True)
+        if bitza_id is not None:
+            # Succeeds only if empty; otherwise (or if already gone) leave it.
+            with contextlib.suppress(OSError):
+                (Path(settings.UPLOAD_DIR) / "bitzas" / bitza_id / "documents").rmdir()
+
+    # ------------------------------------------------------------------
     # Audit log — admin/superuser only (read visibility, not a mutation;
     # the one place in this service that DOES gate by role for a read,
     # unchanged from Phase 2's original behaviour)
@@ -964,6 +1153,11 @@ class BitzaService:
     def _enrich_image(self, image: BitzaImage) -> BitzaImageRead:
         r = BitzaImageRead.model_validate(image)
         r.uploaded_by_display_name = self._user_display_name(image.uploaded_by)
+        return r
+
+    def _enrich_document(self, document: BitzaDocument) -> BitzaDocumentRead:
+        r = BitzaDocumentRead.model_validate(document)
+        r.uploaded_by_display_name = self._user_display_name(document.uploaded_by)
         return r
 
     def _enrich_audit(self, entry: AuditLog) -> AuditLogRead:

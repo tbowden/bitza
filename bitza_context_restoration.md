@@ -148,7 +148,7 @@ bitza/
 ├── bitza_project_context.md         ← full backend design doc, API contract
 ├── bitza_context_restoration.md     ← this file
 ├── bitza_frontend_context.md        ← full frontend design doc — READ THIS for any frontend work
-├── bitza_open_issues.md             ← tracker: Stage 6 shipped, Stage 7 not yet scoped
+├── bitza_open_issues.md             ← tracker: Stage 6 shipped, Stage 7 (documents) backend done
 ├── backend/
 │   ├── AI_instructions.md
 │   ├── ARCHITECTURAL_OVERVIEW.md
@@ -203,6 +203,8 @@ the full bitza tree model (create/edit/retire/reactivate/
 reassign-project, root-bitza lockdown, stock-can't-have-children),
 checkout/checkin (including `/checkouts/mine`), stock adjustments, images
 (authenticated blob fetch), categories, users (admin), and the audit log.
+The one exception is bitza **documents** (datasheets/SDS, Stage 7): the
+backend endpoints exist, the frontend does not use them yet.
 
 ---
 
@@ -210,7 +212,7 @@ checkout/checkin (including `/checkouts/mine`), stock adjustments, images
 
 - **Full backend domain model, every schema/endpoint shape, and the
   reasoning behind each design decision** → `bitza_project_context.md`
-- **Active task: none scoped yet (Stage 6 shipped; Stage 7 undefined)** →
+- **Active task: Stage 7 — document (datasheet/SDS) attachments; backend done, frontend pending** →
   `bitza_open_issues.md`
 - **Full frontend architecture: what's built, conventions, Signal Forms
   usage notes, known assumptions needing backend confirmation, testing
