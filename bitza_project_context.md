@@ -488,7 +488,7 @@ should never be a bitza with images but no designated cover photo.
 
 ```
 GET    /api/v1/bitzas/{id}/images                metadata list
-POST   /api/v1/bitzas/{id}/images                multipart upload, {file, is_primary?}
+POST   /api/v1/bitzas/{id}/images                multipart upload, {file, is_primary?} → 201 (413 over 10 MB, 415 if not an accepted image)
 GET    /api/v1/bitzas/{id}/images/{image_id}     the actual file (authenticated — see below)
 PATCH  /api/v1/bitzas/{id}/images/{image_id}     {is_primary: true} to change the cover photo
 DELETE /api/v1/bitzas/{id}/images/{image_id}     if it was primary, the oldest remaining image is promoted
@@ -498,6 +498,17 @@ Angular clients must fetch image files via `HttpClient` with
 `{ responseType: 'blob' }` and build an object URL — plain `<img src>` will
 not send the Authorization header, and there's no unauthenticated static
 path for these files.
+
+**Upload check.** Same approach as documents (see below): JPEG, PNG, GIF and
+WebP only (not SVG), max 10 MB, and the type is sniffed from the file's bytes
+by `app/core/file_types.py` — the client's `Content-Type` and filename are
+ignored. Anything else is a **415**. The on-disk extension follows the
+detected type (the client's is kept only if consistent, e.g. `.jpeg`), which
+matters because the file is served with the Content-Type guessed from that
+extension. Serving adds `X-Content-Type-Options: nosniff` and maps anything
+that isn't one of the four image types (files from before this check) to
+`application/octet-stream`. Like documents, this checks the head of the file
+only; it is not a full decode or a malware scan.
 
 ### Documents (datasheets, SDS/MSDS, manuals) — Stage 7
 
@@ -531,7 +542,7 @@ DELETE /api/v1/bitzas/{id}/documents/{doc_id}      removes the row, then the fil
   delete. No audit-log entries (also like images).
 - **Hard-deleting a bitza deletes its document files** (after the DB commit).
   Image files are *not* cleaned up on bitza delete — pre-existing gap.
-- **File type is sniffed, not trusted.** The client's `Content-Type` and
+- **File type is sniffed, not trusted.** (Images use the same module; see above.) The client's `Content-Type` and
   filename extension are ignored. `app/core/file_types.py` classifies the file
   from its leading bytes (first 8 KiB; ZIP containers by member names only)
   against a strict allow-list: PDF, PNG, JPEG, GIF, WebP, ZIP, OOXML

@@ -7,6 +7,7 @@ from fastapi.responses import FileResponse
 from pydantic import ValidationError
 
 from app.core.dependencies import get_bitza_service, get_current_user
+from app.core.file_types import ACCEPTED_IMAGE_MEDIA_TYPES
 from app.models.bitza import BitzaKind, BitzaStatus
 from app.models.user import User
 from app.schemas.bitza import (
@@ -394,6 +395,10 @@ def list_images(
     response_model=BitzaImageRead,
     status_code=status.HTTP_201_CREATED,
     summary="Upload an image for a bitza",
+    responses={
+        413: {"description": "Image exceeds 10 MB"},
+        415: {"description": "File content is not an accepted image type"},
+    },
 )
 async def upload_image(
     bitza_id: str,
@@ -402,8 +407,10 @@ async def upload_image(
     current_user: User = Depends(get_current_user),
     svc: BitzaService = Depends(get_bitza_service),
 ) -> BitzaImageRead:
-    """Accepts JPEG, PNG, GIF, or WebP, max 10 MB. The first image
-    uploaded for a bitza always becomes primary regardless of is_primary."""
+    """Accepts JPEG, PNG, GIF, or WebP, max 10 MB. The type is determined
+    from the file's content, not the client's Content-Type or filename;
+    anything else is rejected with 415. The first image uploaded for a
+    bitza always becomes primary regardless of is_primary."""
     return await svc.upload_image(
         bitza_id=bitza_id, file=file, actor=current_user, is_primary=is_primary
     )
@@ -430,8 +437,15 @@ def get_image_file(
     object URL; plain <img src> will not send the Authorization header.
     """
     abs_path = svc.get_image_abs_path(bitza_id=bitza_id, image_id=image_id)
+    # New uploads always have an extension that matches their sniffed type.
+    # Files from before that check may not, so anything that doesn't map to
+    # one of the four image types is served as an opaque download.
     media_type, _ = mimetypes.guess_type(abs_path)
-    return FileResponse(abs_path, media_type=media_type or "application/octet-stream")
+    if media_type not in ACCEPTED_IMAGE_MEDIA_TYPES:
+        media_type = "application/octet-stream"
+    return FileResponse(
+        abs_path, media_type=media_type, headers={"X-Content-Type-Options": "nosniff"}
+    )
 
 
 @bitzas_router.patch(

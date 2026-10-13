@@ -18,9 +18,11 @@ from app.core.exceptions import (
 )
 from app.core.file_types import (
     ACCEPTED_MEDIA_TYPES,
+    SNIFF_BYTES,
     DetectedType,
     UnsupportedFileType,
     detect_document_type,
+    detect_image_type,
 )
 from app.models.audit import AuditLog
 from app.models.category import Category
@@ -70,7 +72,6 @@ from app.schemas.bitza import (
 
 settings = get_settings()
 
-_ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/gif", "image/webp"}
 _MAX_IMAGE_BYTES = 10 * 1024 * 1024  # 10 MB
 
 _DOCUMENT_CHUNK_BYTES = 1024 * 1024  # stream uploads to disk 1 MB at a time
@@ -95,8 +96,8 @@ def _safe_extension(filename: Optional[str]) -> str:
     return suffix if _SAFE_EXTENSION.fullmatch(suffix) else ""
 
 
-def _document_extension(filename: Optional[str], detected: DetectedType) -> str:
-    """On-disk extension for a document: the client's own if it is consistent
+def _upload_extension(filename: Optional[str], detected: DetectedType) -> str:
+    """On-disk extension for an upload: the client's own if it is consistent
     with what the content really is, otherwise the canonical one for the
     detected type (so e.g. a PDF named ``x.html`` is stored as ``.pdf``)."""
     client_ext = _safe_extension(filename)
@@ -817,20 +818,24 @@ class BitzaService:
         if not bitza:
             raise _not_found("Bitza not found")
 
-        if file.content_type not in _ALLOWED_IMAGE_TYPES:
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-                detail=f"Unsupported image type '{file.content_type}'. "
-                       f"Allowed: {', '.join(_ALLOWED_IMAGE_TYPES)}",
-            )
         contents = await file.read()
         if len(contents) > _MAX_IMAGE_BYTES:
             raise HTTPException(
-                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                status_code=status.HTTP_413_CONTENT_TOO_LARGE,
                 detail="Image exceeds 10 MB limit",
             )
 
-        ext = Path(file.filename or "image.jpg").suffix or ".jpg"
+        # The client's Content-Type and filename are not trusted: the type is
+        # sniffed from the bytes, and it decides the on-disk extension (which
+        # in turn decides the Content-Type the image is served with).
+        try:
+            detected = detect_image_type(contents[:SNIFF_BYTES])
+        except UnsupportedFileType as exc:
+            raise HTTPException(
+                status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE, detail=str(exc)
+            ) from exc
+
+        ext = _upload_extension(_clean_filename(file.filename), detected)
         rel_path = f"bitzas/{bitza_id}/{uuid.uuid4().hex}{ext}"
         abs_path = Path(settings.UPLOAD_DIR) / rel_path
         abs_path.parent.mkdir(parents=True, exist_ok=True)
@@ -943,7 +948,7 @@ class BitzaService:
                     status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE, detail=str(exc)
                 ) from exc
 
-            rel_path = f"{rel_dir}/{stem}{_document_extension(original_filename, detected)}"
+            rel_path = f"{rel_dir}/{stem}{_upload_extension(original_filename, detected)}"
             final_path = Path(settings.UPLOAD_DIR) / rel_path
             part_path.replace(final_path)
 

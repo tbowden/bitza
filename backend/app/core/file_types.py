@@ -7,6 +7,9 @@ its member names). The result is what gets stored as the document's
 ``content_type``, served back on download, and used to pick a safe on-disk
 extension.
 
+Used for both document uploads (``detect_document_type``) and image uploads
+(``detect_image_type``, a subset limited to the four web image formats).
+
 Policy is a strict allow-list. Anything not recognised is rejected rather
 than stored as "unknown". The accepted set is the ``DetectedType`` constants
 below; to accept another format, add a constant, a signature test in
@@ -69,6 +72,10 @@ ODP = DetectedType(
 )
 TEXT = DetectedType("text/plain", ".txt", frozenset({".txt", ".csv", ".md", ".log"}))
 
+IMAGE_TYPES: tuple[DetectedType, ...] = (PNG, JPEG, GIF, WEBP)
+ACCEPTED_IMAGE_MEDIA_TYPES: frozenset[str] = frozenset(t.media_type for t in IMAGE_TYPES)
+IMAGE_ACCEPTED_DESCRIPTION = "JPEG, PNG, GIF and WebP images"
+
 ALL_TYPES: tuple[DetectedType, ...] = (
     PDF, PNG, JPEG, GIF, WEBP, ZIP, DOCX, XLSX, PPTX, ODT, ODS, ODP, TEXT,
 )
@@ -99,14 +106,8 @@ def detect_document_type(path: Path) -> DetectedType:
     whole_file = path.stat().st_size <= SNIFF_BYTES
 
     # Fixed signatures at offset 0 first...
-    if head.startswith(b"\x89PNG\r\n\x1a\n"):
-        return PNG
-    if head.startswith(b"\xff\xd8\xff"):
-        return JPEG
-    if head[:6] in (b"GIF87a", b"GIF89a"):
-        return GIF
-    if head[:4] == b"RIFF" and head[8:12] == b"WEBP":
-        return WEBP
+    if image := _match_image_signature(head):
+        return image
     if head.startswith(b"PK\x03\x04"):
         return _classify_zip(path)
     # ...then PDF, whose header may be preceded by a little junk (this is
@@ -127,6 +128,29 @@ def detect_document_type(path: Path) -> DetectedType:
     raise UnsupportedFileType(
         f"Unsupported or unrecognised file type. Accepted: {ACCEPTED_DESCRIPTION}."
     )
+
+
+def detect_image_type(head: bytes) -> DetectedType:
+    """Classify an uploaded image from its leading bytes. Only JPEG, PNG, GIF
+    and WebP are accepted (not SVG, which can carry script). Raises
+    ``UnsupportedFileType`` otherwise."""
+    if image := _match_image_signature(head):
+        return image
+    raise UnsupportedFileType(
+        f"Unsupported or unrecognised image type. Accepted: {IMAGE_ACCEPTED_DESCRIPTION}."
+    )
+
+
+def _match_image_signature(head: bytes) -> DetectedType | None:
+    if head.startswith(b"\x89PNG\r\n\x1a\n"):
+        return PNG
+    if head.startswith(b"\xff\xd8\xff"):
+        return JPEG
+    if head[:6] in (b"GIF87a", b"GIF89a"):
+        return GIF
+    if head[:4] == b"RIFF" and head[8:12] == b"WEBP":
+        return WEBP
+    return None
 
 
 def _decodes_as_text(head: bytes, *, whole_file: bool) -> bool:

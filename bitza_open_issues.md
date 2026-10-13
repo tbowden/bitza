@@ -109,8 +109,18 @@ served on download (anything off the allow-list is served as
 to a `.part` file and are renamed once classified. 286 backend tests green
 (212 + 74 new: `tests/test_file_types.py` plus a content-sniffing section in
 `tests/test_documents.py`). Details in `bitza_project_context.md`
-("Documents"). Not done: whole-file validation or malware scanning, and the
-same check for *image* uploads (see below).
+("Documents"). Image uploads got the same check in a follow-up patch (see
+below). Not done: whole-file validation or malware scanning.
+
+**Image upload check delivered (backend):** image uploads are now sniffed with
+the same module (`detect_image_type`: JPEG, PNG, GIF, WebP; SVG deliberately
+not accepted). The client's `Content-Type` and extension are ignored, the
+on-disk extension follows the content, unsupported content is a **415**
+(previously a 422 based on the claimed type only), and image serving adds
+`nosniff` and maps any non-image extension (pre-existing files) to
+`application/octet-stream`. `tests/test_images.py` is new — the image
+endpoints had no backend tests before. 332 backend tests green (286 + 46). Also fixed: the image 413 path used a
+deprecated Starlette constant that errors under `-W error`.
 
 **Still to do for Stage 7:**
 - **Frontend**: model, service, and a documents section on the bitza detail
@@ -120,10 +130,7 @@ same check for *image* uploads (see below).
   upload control (axe has never been run on it).
 - **DB↔filesystem sync tooling** for admins (orphaned files, missing files;
   the stored `sha256` allows integrity checks).
-- Known related gaps: **image uploads still trust the client** — the image
-  endpoint checks only the claimed `Content-Type` and keeps the client's raw
-  filename suffix on disk (the document-upload sniffing in `file_types.py`
-  could be reused for it); image files are not removed when a bitza is hard
+- Known related gaps: image files are not removed when a bitza is hard
   deleted; documents/images live in the same volume as the DB but the
   documented backup copies only the `.db` file.
 

@@ -17,6 +17,7 @@ from app.core.file_types import (
     ALL_TYPES,
     DOCX,
     GIF,
+    IMAGE_TYPES,
     JPEG,
     ODP,
     ODS,
@@ -31,6 +32,7 @@ from app.core.file_types import (
     ZIP,
     UnsupportedFileType,
     detect_document_type,
+    detect_image_type,
 )
 
 
@@ -190,6 +192,52 @@ class TestText:
 
     def test_text_that_merely_mentions_markup_later_is_fine(self, tmp_path):
         assert _detect(tmp_path, b"Notes: the <html> tag is not used here\n") is TEXT
+
+
+class TestImageDetection:
+    @pytest.mark.parametrize(
+        ("content", "expected"),
+        [
+            (b"\x89PNG\r\n\x1a\n" + b"\x00" * 8, PNG),
+            (b"\xff\xd8\xff\xdb" + b"\x00" * 8, JPEG),
+            (b"GIF87a" + b"\x00" * 8, GIF),
+            (b"GIF89a" + b"\x00" * 8, GIF),
+            (b"RIFF\x24\x00\x00\x00WEBPVP8L" + b"\x00" * 8, WEBP),
+        ],
+    )
+    def test_accepted_image_types(self, content, expected):
+        assert detect_image_type(content) is expected
+
+    @pytest.mark.parametrize(
+        "content",
+        [
+            b"",
+            b"%PDF-1.7\n",  # a valid *document*, but not an image
+            b"just text",
+            b"<svg xmlns='http://www.w3.org/2000/svg'/>",
+            b"<!DOCTYPE html><html></html>",
+            b"PK\x03\x04" + b"\x00" * 16,
+            b"RIFF\x24\x00\x00\x00WAVEfmt ",
+            b"GIF90a",
+            b"\x89PNG",  # truncated signature
+            b"\xff\xd8",  # truncated signature
+        ],
+    )
+    def test_everything_else_is_rejected(self, content):
+        with pytest.raises(UnsupportedFileType) as exc:
+            detect_image_type(content)
+        assert "image" in str(exc.value)
+
+    def test_image_types_are_a_subset_of_the_document_types(self):
+        assert set(IMAGE_TYPES) <= set(ALL_TYPES)
+        assert {t.media_type for t in IMAGE_TYPES} == file_types.ACCEPTED_IMAGE_MEDIA_TYPES
+
+    def test_document_and_image_detection_agree_on_images(self, tmp_path):
+        for content, expected in [
+            (b"\x89PNG\r\n\x1a\n" + b"\x00" * 8, PNG),
+            (b"\xff\xd8\xff\xe0" + b"\x00" * 8, JPEG),
+        ]:
+            assert _detect(tmp_path, content) is detect_image_type(content) is expected
 
 
 class TestTable:
