@@ -235,8 +235,8 @@ class BitzaDocument(Base):
 
     Every descriptive field is optional. original_filename, content_type,
     size_bytes and sha256 are facts about the uploaded file, captured at
-    upload time; content_type is whatever the client claimed (it is NOT
-    yet verified against the file's contents). title / doc_type /
+    upload time; content_type is the type detected from the file's
+    content (app/core/file_types.py), not the client's claim. title / doc_type /
     source_url / note are user-supplied and editable afterwards.
     """
 

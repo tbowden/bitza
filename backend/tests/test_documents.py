@@ -6,6 +6,9 @@ Covers:
 - upload with and without metadata; blank form fields; metadata validation
 - file lands on disk under UPLOAD_DIR with the expected size / SHA-256
 - unsafe client filenames can't influence the on-disk path
+- content sniffing: the detected type (not the client's claim) is stored,
+  served and used for the on-disk extension; unrecognised/markup files are
+  rejected with 415 and leave nothing behind
 - size cap and empty-file rejection (and no partial file left behind)
 - list / download / PATCH (including clearing fields) / delete
 - hard-deleting a bitza removes its document files
@@ -16,14 +19,20 @@ nothing is ever written into the real ./data/uploads.
 """
 
 import hashlib
+import io
+import zipfile
 
 import pytest
 
+from app.models.bitza import BitzaDocument
 from app.models.project import Project
+from app.repositories.bitza_document_repository import BitzaDocumentRepository
 from app.services import bitza_service
 from tests.test_bitzas import BASE, auth, make_exact_stock, make_mobile
 
 PDF_BYTES = b"%PDF-1.4\n% pretend datasheet\n%%EOF\n"
+PNG_BYTES = b"\x89PNG\r\n\x1a\n" + b"\x00" * 16
+HTML_BYTES = b"<!DOCTYPE html><html><body>Access denied</body></html>"
 
 
 @pytest.fixture(autouse=True)
@@ -163,8 +172,8 @@ class TestUpload:
     def test_oversize_rejected_and_nothing_left_behind(
         self, client, user_token, stock_item, upload_dir, monkeypatch
     ):
-        monkeypatch.setattr(bitza_service.settings, "MAX_DOCUMENT_BYTES", 16)
-        resp = _upload(client, user_token, stock_item["id"], content=b"x" * 17)
+        monkeypatch.setattr(bitza_service.settings, "MAX_DOCUMENT_BYTES", len(PDF_BYTES))
+        resp = _upload(client, user_token, stock_item["id"], content=PDF_BYTES + b"x")
         assert resp.status_code == 413
         assert _files_on_disk(upload_dir) == []
         assert client.get(
@@ -174,14 +183,15 @@ class TestUpload:
     def test_file_exactly_at_limit_accepted(
         self, client, user_token, stock_item, monkeypatch
     ):
-        monkeypatch.setattr(bitza_service.settings, "MAX_DOCUMENT_BYTES", 16)
-        resp = _upload(client, user_token, stock_item["id"], content=b"x" * 16)
+        monkeypatch.setattr(bitza_service.settings, "MAX_DOCUMENT_BYTES", len(PDF_BYTES))
+        resp = _upload(client, user_token, stock_item["id"], content=PDF_BYTES)
         assert resp.status_code == 201, resp.text
 
     def test_file_larger_than_one_chunk_is_streamed_intact(
         self, client, user_token, stock_item, upload_dir
     ):
-        big = b"abcdefgh" * (bitza_service._DOCUMENT_CHUNK_BYTES // 8 * 2 + 5)  # > 2 chunks
+        # A valid PDF header followed by > 2 chunks of filler.
+        big = PDF_BYTES + b"abcdefgh" * (bitza_service._DOCUMENT_CHUNK_BYTES // 8 * 2 + 5)
         resp = _upload(client, user_token, stock_item["id"], content=big)
         assert resp.status_code == 201, resp.text
         assert resp.json()["size_bytes"] == len(big)
@@ -218,13 +228,183 @@ class TestUnsafeFilenames:
         resp = _upload(client, user_token, stock_item["id"], filename="evil.<script>")
         assert resp.status_code == 201, resp.text
         (stored,) = _files_on_disk(upload_dir)
-        assert stored.suffix == ""
+        # Never the client's suffix; the canonical one for the detected type.
+        assert stored.suffix == ".pdf"
 
     def test_no_filename_still_works(self, client, user_token, stock_item):
         resp = _upload(client, user_token, stock_item["id"], filename="")
         # An empty filename means no file part to FastAPI's form parser; either
         # outcome is acceptable as long as it's a clean client error, not a 500.
         assert resp.status_code in (201, 422)
+
+
+# =========================================================================
+# Content sniffing
+# =========================================================================
+
+def _zip_bytes(members: dict[str, bytes]) -> bytes:
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_STORED) as zf:
+        for name, data in members.items():
+            zf.writestr(name, data)
+    return buf.getvalue()
+
+
+class TestContentSniffing:
+    def test_detected_type_is_stored_not_the_clients_claim(
+        self, client, user_token, stock_item, upload_dir
+    ):
+        resp = _upload(
+            client, user_token, stock_item["id"],
+            content=PNG_BYTES, filename="pinout.pdf", content_type="application/pdf",
+        )
+        assert resp.status_code == 201, resp.text
+        body = resp.json()
+        assert body["content_type"] == "image/png"
+        # The client's filename is kept for display/download...
+        assert body["original_filename"] == "pinout.pdf"
+        # ...but not as the on-disk extension, which follows the content.
+        (stored,) = _files_on_disk(upload_dir)
+        assert stored.suffix == ".png"
+
+        dl = client.get(
+            f"{BASE}/{stock_item['id']}/documents/{body['id']}", headers=auth(user_token)
+        )
+        assert dl.headers["content-type"].startswith("image/png")
+
+    def test_dangerous_claimed_type_is_ignored_for_acceptable_content(
+        self, client, user_token, stock_item
+    ):
+        resp = _upload(
+            client, user_token, stock_item["id"],
+            content=PDF_BYTES, filename="sheet.html", content_type="text/html",
+        )
+        assert resp.status_code == 201, resp.text
+        assert resp.json()["content_type"] == "application/pdf"
+
+    def test_client_extension_kept_when_consistent_with_content(
+        self, client, user_token, stock_item, upload_dir
+    ):
+        resp = _upload(
+            client, user_token, stock_item["id"],
+            content=b"\xff\xd8\xff\xe0" + b"\x00" * 16,
+            filename="board.JPEG", content_type="image/jpeg",
+        )
+        assert resp.status_code == 201, resp.text
+        assert resp.json()["content_type"] == "image/jpeg"
+        (stored,) = _files_on_disk(upload_dir)
+        assert stored.suffix == ".jpeg"
+
+    def test_html_error_page_named_pdf_is_rejected(
+        self, client, user_token, stock_item, upload_dir
+    ):
+        resp = _upload(client, user_token, stock_item["id"], content=HTML_BYTES)
+        assert resp.status_code == 415
+        assert "web page" in resp.json()["detail"]
+        assert _files_on_disk(upload_dir) == []
+        assert client.get(
+            f"{BASE}/{stock_item['id']}/documents", headers=auth(user_token)
+        ).json() == []
+
+    @pytest.mark.parametrize(
+        "content",
+        [
+            b"MZ\x90\x00\x03\x00\x00\x00" + b"\x00" * 32,  # Windows executable
+            b"\x7fELF\x02\x01\x01\x00" + b"\x00" * 32,  # Linux executable
+            b"\x00\x01\x02\x03" * 64,  # arbitrary binary
+        ],
+    )
+    def test_unrecognised_binary_is_rejected_and_nothing_left_behind(
+        self, client, user_token, stock_item, upload_dir, content
+    ):
+        # Claiming to be a PDF doesn't help.
+        resp = _upload(client, user_token, stock_item["id"], content=content)
+        assert resp.status_code == 415
+        assert "Accepted" in resp.json()["detail"]
+        assert _files_on_disk(upload_dir) == []  # includes any *.part temp file
+
+    def test_plain_text_accepted_and_extension_follows_content(
+        self, client, user_token, stock_item, upload_dir
+    ):
+        resp = _upload(
+            client, user_token, stock_item["id"],
+            content=b"LM358 notes\nVcc 3-32 V\n", filename="notes.html",
+            content_type="text/html",
+        )
+        assert resp.status_code == 201, resp.text
+        assert resp.json()["content_type"] == "text/plain"
+        (stored,) = _files_on_disk(upload_dir)
+        assert stored.suffix == ".txt"
+
+    @pytest.mark.parametrize(
+        ("members", "expected"),
+        [
+            (
+                {"[Content_Types].xml": b"<x/>", "word/document.xml": b"<x/>"},
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            ),
+            (
+                {"[Content_Types].xml": b"<x/>", "xl/workbook.xml": b"<x/>"},
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            ),
+            (
+                {"[Content_Types].xml": b"<x/>", "ppt/presentation.xml": b"<x/>"},
+                "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+            ),
+            (
+                {"mimetype": b"application/vnd.oasis.opendocument.text", "content.xml": b"<x/>"},
+                "application/vnd.oasis.opendocument.text",
+            ),
+            ({"readme.txt": b"hello", "lib/foo.kicad_sym": b"(x)"}, "application/zip"),
+        ],
+    )
+    def test_zip_containers_are_classified(
+        self, client, user_token, stock_item, members, expected
+    ):
+        resp = _upload(
+            client, user_token, stock_item["id"],
+            content=_zip_bytes(members), filename="thing.bin",
+            content_type="application/octet-stream",
+        )
+        assert resp.status_code == 201, resp.text
+        assert resp.json()["content_type"] == expected
+
+    def test_corrupt_zip_is_rejected(self, client, user_token, stock_item, upload_dir):
+        resp = _upload(
+            client, user_token, stock_item["id"],
+            content=b"PK\x03\x04" + b"not really a zip" * 10, filename="x.zip",
+        )
+        assert resp.status_code == 415
+        assert _files_on_disk(upload_dir) == []
+
+    def test_no_files_left_behind_if_the_db_write_fails(
+        self, client, user_token, stock_item, upload_dir, monkeypatch
+    ):
+        def boom(self, document):
+            raise RuntimeError("simulated DB failure")
+
+        monkeypatch.setattr(BitzaDocumentRepository, "create", boom)
+        with pytest.raises(RuntimeError):
+            _upload(client, user_token, stock_item["id"])
+        # Neither the temporary .part file nor the renamed final file remain.
+        assert _files_on_disk(upload_dir) == []
+
+    def test_download_serves_unlisted_stored_type_as_opaque_binary(
+        self, client, db, user_token, stock_item
+    ):
+        """Rows predating sniffing (or edited by admin tooling) may hold a
+        client-claimed type; those must never be served as, say, text/html."""
+        doc = _upload(client, user_token, stock_item["id"]).json()
+        row = db.query(BitzaDocument).filter_by(id=doc["id"]).one()
+        row.content_type = "text/html"
+        db.commit()
+
+        resp = client.get(
+            f"{BASE}/{stock_item['id']}/documents/{doc['id']}", headers=auth(user_token)
+        )
+        assert resp.status_code == 200
+        assert resp.headers["content-type"].startswith("application/octet-stream")
+        assert resp.headers["content-disposition"].startswith("attachment")
 
 
 # =========================================================================

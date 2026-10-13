@@ -4,8 +4,8 @@
 across two reviewed patches (backend, then frontend — see the "Stage 6
 (complete)" section below for what was actually decided and delivered).
 **Stage 7 is in progress** — see the "Stage 7" section below (document
-attachments; backend done, frontend and file-type checking deferred). For
-full project orientation start at
+attachments; backend done including upload file-type checking, frontend
+deferred). For full project orientation start at
 `bitza_context_restoration.md`; for the backend architecture these items
 touch, see `bitza_project_context.md`.
 
@@ -89,7 +89,7 @@ going in.
 **Decided:** metadata all optional (including the original URL); files on the
 filesystem with the path in the DB, as for images; DB/filesystem sync is a
 later admin-side process; backend first, frontend later; upload file-type
-sanity checking is separate later work. Full contract in
+sanity checking is separate work (since done, see below). Full contract in
 `bitza_project_context.md` ("Documents").
 
 **Backend delivered:** migration `0005_bitza_documents`, `BitzaDocument` model,
@@ -99,15 +99,31 @@ sanity checking is separate later work. Full contract in
 migration was checked with `alembic check` (no drift) and a downgrade/upgrade
 round-trip.
 
+**File-type checking delivered (backend):** `app/core/file_types.py` sniffs
+every document upload from its leading bytes (ZIP containers by member names)
+against a strict allow-list — PDF, PNG, JPEG, GIF, WebP, ZIP, OOXML,
+OpenDocument, UTF-8 plain text. Anything else is a 415. The client's
+`Content-Type` and extension are ignored; the *detected* type is stored,
+served on download (anything off the allow-list is served as
+`application/octet-stream`) and used for the on-disk extension. Uploads stream
+to a `.part` file and are renamed once classified. 286 backend tests green
+(212 + 74 new: `tests/test_file_types.py` plus a content-sniffing section in
+`tests/test_documents.py`). Details in `bitza_project_context.md`
+("Documents"). Not done: whole-file validation or malware scanning, and the
+same check for *image* uploads (see below).
+
 **Still to do for Stage 7:**
 - **Frontend**: model, service, and a documents section on the bitza detail
-  page (upload, list, download via blob fetch, edit metadata, delete). Avoid
+  page (upload, list, download via blob fetch — saved as a download, never
+  opened inline in the app — edit metadata, delete). Avoid
   the visually-hidden-input pattern the image gallery uses for the new
   upload control (axe has never been run on it).
-- **File-type sanity checking** on upload (magic bytes vs claimed type).
 - **DB↔filesystem sync tooling** for admins (orphaned files, missing files;
   the stored `sha256` allows integrity checks).
-- Known related gaps: image files are not removed when a bitza is hard
+- Known related gaps: **image uploads still trust the client** — the image
+  endpoint checks only the claimed `Content-Type` and keeps the client's raw
+  filename suffix on disk (the document-upload sniffing in `file_types.py`
+  could be reused for it); image files are not removed when a bitza is hard
   deleted; documents/images live in the same volume as the DB but the
   documented backup copies only the `.db` file.
 

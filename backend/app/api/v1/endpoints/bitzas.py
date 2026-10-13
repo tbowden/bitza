@@ -486,6 +486,10 @@ def list_documents(
     response_model=BitzaDocumentRead,
     status_code=status.HTTP_201_CREATED,
     summary="Upload a document (datasheet, SDS/MSDS, manual) for a bitza",
+    responses={
+        413: {"description": "File exceeds MAX_DOCUMENT_BYTES"},
+        415: {"description": "File content is not an accepted type"},
+    },
 )
 async def upload_document(
     bitza_id: str,
@@ -499,8 +503,11 @@ async def upload_document(
 ) -> BitzaDocumentRead:
     """Multipart upload: the file, plus optional form fields doc_type
     (datasheet | sds | manual | other), title, source_url (http/https) and
-    note. Any file type is accepted for now; size is capped by the
-    MAX_DOCUMENT_BYTES setting (default 50 MB)."""
+    note. The file's type is determined from its content, not from the
+    client's Content-Type or filename: PDF, common images, ZIP, OOXML/
+    OpenDocument and plain-text files are accepted; anything else is
+    rejected with 415. The stored (and served) content_type is the detected
+    one. Size is capped by the MAX_DOCUMENT_BYTES setting (default 50 MB)."""
     # Validated through the schema (rather than typed on the parameters) so
     # blank strings are normalised and the rules live in one place, shared
     # with PATCH.
@@ -530,8 +537,8 @@ def download_document(
     current_user: User = Depends(get_current_user),
     svc: BitzaService = Depends(get_bitza_service),
 ) -> FileResponse:
-    """Always served as an attachment with nosniff, since the content type
-    is not yet verified against the file's contents."""
+    """Always served as an attachment with nosniff, with the content type
+    detected at upload (or application/octet-stream for anything else)."""
     abs_path, download_name, media_type = svc.get_document_file(
         bitza_id=bitza_id, document_id=document_id
     )

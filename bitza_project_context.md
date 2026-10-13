@@ -511,7 +511,7 @@ process, deliberately not policed by the app at runtime.
 
 ```
 GET    /api/v1/bitzas/{id}/documents               metadata list, oldest first
-POST   /api/v1/bitzas/{id}/documents               multipart: file + optional doc_type/title/source_url/note → 201
+POST   /api/v1/bitzas/{id}/documents               multipart: file + optional doc_type/title/source_url/note → 201 (415 if file type not accepted)
 GET    /api/v1/bitzas/{id}/documents/{doc_id}      the file (authenticated; always attachment + nosniff)
 PATCH  /api/v1/bitzas/{id}/documents/{doc_id}      {doc_type?, title?, source_url?, note?}; null/blank clears a field
 DELETE /api/v1/bitzas/{id}/documents/{doc_id}      removes the row, then the file → 204
@@ -521,7 +521,8 @@ DELETE /api/v1/bitzas/{id}/documents/{doc_id}      removes the row, then the fil
   sds | manual | other` (plain string column, validated in the schema, so new
   values need no migration). `source_url` (the original download URL) must be
   http(s). Facts captured at upload and not editable: `original_filename`
-  (path components stripped), `content_type`, `size_bytes`, `sha256`.
+  (path components stripped), `content_type` (detected, see below),
+  `size_bytes`, `sha256`.
 - **Uploads stream to disk in 1 MB chunks** and are capped by
   `MAX_DOCUMENT_BYTES` (default 50 MB, env-configurable; any reverse proxy's
   body limit must be at least that). Empty files are rejected. A partial file
@@ -530,15 +531,39 @@ DELETE /api/v1/bitzas/{id}/documents/{doc_id}      removes the row, then the fil
   delete. No audit-log entries (also like images).
 - **Hard-deleting a bitza deletes its document files** (after the DB commit).
   Image files are *not* cleaned up on bitza delete — pre-existing gap.
-- **Content type is NOT verified.** It is whatever the client claimed. The
-  mitigations in place are attachment disposition, `nosniff`, http(s)-only
-  `source_url`, and the extension on disk being restricted to short
-  alphanumeric suffixes. Real file-type sanity checking (magic bytes etc.) is
-  planned as separate follow-up work; the natural hook is
-  `BitzaService.upload_document`, before the DB row is created.
+- **File type is sniffed, not trusted.** The client's `Content-Type` and
+  filename extension are ignored. `app/core/file_types.py` classifies the file
+  from its leading bytes (first 8 KiB; ZIP containers by member names only)
+  against a strict allow-list: PDF, PNG, JPEG, GIF, WebP, ZIP, OOXML
+  (`.docx`/`.xlsx`/`.pptx`), OpenDocument (`.odt`/`.ods`/`.odp`) and UTF-8
+  plain text (`.txt`/`.csv`/`.md`/`.log`). Anything else is rejected with
+  **415**. Text that starts with `<` (HTML/XML/SVG) gets a specific "looks like
+  a web page" message — the usual cause is a vendor site returning an error
+  page saved as `*.pdf`. Legacy `.doc`/`.xls`, executables and unrecognised
+  binaries are rejected; adding a format means adding a constant in
+  `file_types.py`.
+  - The stored `content_type` is the **detected** media type, not the claim,
+    and is what download serves. A mismatch between claim and content is not
+    an error; the claim is simply ignored.
+  - The on-disk extension is the client's own only if it is consistent with
+    the detected type, otherwise the canonical one (a PDF uploaded as `x.html`
+    is stored as `.pdf`). `original_filename` is kept as given, for display.
+  - Download serves any stored type not on the allow-list (e.g. a row from
+    before sniffing existed) as `application/octet-stream`.
+  - Uploads stream to `<uuid>.part` and are renamed once classified, so a
+    rejected upload never leaves a file; admin/sync tooling that walks
+    `UPLOAD_DIR` should ignore or clear stray `*.part` files.
+  - This is a sanity check on the head of the file, not a malware scan and not
+    full-file validation. Other mitigations stay in place: attachment
+    disposition, `nosniff`, http(s)-only `source_url`, and on-disk extensions
+    restricted to the detected type's known set.
 - **Frontend: not built yet** (backend-first; usable via the Swagger UI at
   `/docs` in the meantime). As with images, a future Angular client must
   fetch the file via `HttpClient` + blob.
+  Save fetched documents as a download; do not open the blob inline in the app
+  (a blob URL runs in the app's origin and bypasses the `attachment`/`nosniff`
+  headers). If inline PDF viewing is ever wanted, re-wrap the blob with an
+  explicit `application/pdf` type first.
 
 ### Acquisition / provenance
 

@@ -1,6 +1,5 @@
 import contextlib
 import hashlib
-import mimetypes
 import re
 import uuid
 from datetime import datetime, timezone
@@ -16,6 +15,12 @@ from app.core.exceptions import (
     PermissionDeniedError,
     RootBitzaExistsError,
     RootBitzaProtectedError,
+)
+from app.core.file_types import (
+    ACCEPTED_MEDIA_TYPES,
+    DetectedType,
+    UnsupportedFileType,
+    detect_document_type,
 )
 from app.models.audit import AuditLog
 from app.models.category import Category
@@ -88,6 +93,14 @@ def _safe_extension(filename: Optional[str]) -> str:
     could be abused as part of a path."""
     suffix = Path(filename).suffix.lower() if filename else ""
     return suffix if _SAFE_EXTENSION.fullmatch(suffix) else ""
+
+
+def _document_extension(filename: Optional[str], detected: DetectedType) -> str:
+    """On-disk extension for a document: the client's own if it is consistent
+    with what the content really is, otherwise the canonical one for the
+    detected type (so e.g. a PDF named ``x.html`` is stored as ``.pdf``)."""
+    client_ext = _safe_extension(filename)
+    return client_ext if client_ext in detected.extensions else detected.extension
 
 
 def _not_found(msg: str) -> HTTPException:
@@ -896,8 +909,10 @@ class BitzaService:
     # the DB — and the same permission model: any authenticated user may
     # upload, edit or delete. Unlike images, uploads are streamed to disk in
     # chunks (datasheets can be large) and the file's size and SHA-256 are
-    # recorded. What is NOT done yet: the content type is the client's claim
-    # and is not verified against the bytes — planned as separate work.
+    # recorded. The client's claimed content type and filename extension are
+    # never trusted: the file is sniffed (app/core/file_types.py), anything
+    # outside the allow-list is rejected with 415, and the *detected* type is
+    # what gets stored, served and used for the on-disk extension.
     # ------------------------------------------------------------------
 
     async def upload_document(
@@ -911,18 +926,27 @@ class BitzaService:
             raise _not_found("Bitza not found")
 
         original_filename = _clean_filename(file.filename)
-        content_type = (file.content_type or "").split(";")[0].strip().lower()[:100]
-        if not content_type and original_filename:
-            content_type = mimetypes.guess_type(original_filename)[0] or ""
 
-        rel_path = (
-            f"bitzas/{bitza_id}/documents/"
-            f"{uuid.uuid4().hex}{_safe_extension(original_filename)}"
-        )
-        abs_path = Path(settings.UPLOAD_DIR) / rel_path
-        size_bytes, sha256 = await self._stream_upload_to_disk(file, abs_path)
+        rel_dir = f"bitzas/{bitza_id}/documents"
+        stem = uuid.uuid4().hex
+        # Stream to a temporary name first: the final extension depends on
+        # what the content turns out to be.
+        part_path = Path(settings.UPLOAD_DIR) / rel_dir / f"{stem}.part"
+        size_bytes, sha256 = await self._stream_upload_to_disk(file, part_path)
 
+        final_path: Optional[Path] = None
         try:
+            try:
+                detected = detect_document_type(part_path)
+            except UnsupportedFileType as exc:
+                raise HTTPException(
+                    status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE, detail=str(exc)
+                ) from exc
+
+            rel_path = f"{rel_dir}/{stem}{_document_extension(original_filename, detected)}"
+            final_path = Path(settings.UPLOAD_DIR) / rel_path
+            part_path.replace(final_path)
+
             document = BitzaDocument(
                 id=str(uuid.uuid4()),
                 bitza_id=bitza_id,
@@ -932,7 +956,7 @@ class BitzaService:
                 source_url=data.source_url,
                 note=data.note,
                 original_filename=original_filename,
-                content_type=content_type or None,
+                content_type=detected.media_type,
                 size_bytes=size_bytes,
                 sha256=sha256,
                 uploaded_by=actor.id,
@@ -940,8 +964,11 @@ class BitzaService:
             created = self._documents.create(document)
             self._db.commit()
         except Exception:
-            # Don't leave an unreferenced file behind if the DB write fails.
-            abs_path.unlink(missing_ok=True)
+            # Don't leave an unreferenced file behind on any failure
+            # (rejected type, rename, or DB write).
+            part_path.unlink(missing_ok=True)
+            if final_path is not None:
+                final_path.unlink(missing_ok=True)
             raise
         return self._enrich_document(created)
 
@@ -957,10 +984,14 @@ class BitzaService:
         if not abs_path.is_file():
             raise _not_found("Document file not found")
         download_name = document.original_filename or abs_path.name
+        # Defence in depth: uploads store the sniffed type, but rows from
+        # before sniffing existed (or edited by admin tooling) may hold a
+        # client-claimed one. Anything not on the allow-list is served as an
+        # opaque download.
         media_type = (
             document.content_type
-            or mimetypes.guess_type(download_name)[0]
-            or "application/octet-stream"
+            if document.content_type in ACCEPTED_MEDIA_TYPES
+            else "application/octet-stream"
         )
         return str(abs_path), download_name, media_type
 
