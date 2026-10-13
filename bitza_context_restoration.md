@@ -22,8 +22,30 @@ A tracker for physical stuff — originally home workshop components and
 tools, now generalised to also serve community or student clubs with
 rotating membership and multiple potentially overlaping teams or projects.
 One unified data model serves both; the club case is simply the richer end
-of the same schema. Backend: FastAPI + SQLite. Frontend: Angular 22 +
-Angular Material.
+of the same schema. Backend: FastAPI + SQLite (Python 3.14, uv). Frontend:
+Angular 22 + Angular Material.
+
+---
+
+## Running it locally
+
+```bash
+# backend (from backend/)
+uv sync
+uv run alembic upgrade head
+uv run python -m app.cli create-superuser     # first time only
+uv run uvicorn app.main:app --reload          # http://localhost:8000/api/v1/docs
+
+# frontend (from frontend/bitza/)
+nvm use                                        # reads ../.nvmrc (v24.16.0)
+npm ci
+npm start                                      # = npx ng serve → http://localhost:4200
+```
+
+`ng` is a local npm dev dependency, **not** a uv/Python tool — run it only via
+`npm start`/`npx` from `frontend/bitza`. (`uv run ng serve` fails with
+"Failed to spawn `ng`"; an easy mix-up when moving between the two stacks.)
+Backend uploads land in `backend/data/uploads/` by default.
 
 ---
 
@@ -37,6 +59,7 @@ Angular Material.
 | **4** | Frontend/backend schema reconciliation, completeness pass, `/me` landing page, `kind` editability | ✅ Done. The dedicated doc this was tracked in has been retired — durable lessons folded into this file below; current behavior is described directly in `bitza_project_context.md`/`bitza_frontend_context.md` |
 | **5** | Post-reconciliation fixes (login→`/me` default, root bitza lockdown, stock-can't-have-children, Team→Project frontend rename) | ✅ Done — four items, applied and pushed across four reviewed patches |
 | **6** | Team → Project, backend (+ frontend internals) | ✅ Done — two reviewed patches (backend, then frontend), applied and pushed |
+| **7** | Document attachments (datasheets, SDS/MSDS, manuals) | 🟡 **Backend done** — endpoints, migration `0005`, and content-sniffing file-type checks for both document *and image* uploads (applied and pushed). **Frontend not started — this is the next piece of work.** See `bitza_open_issues.md` |
 
 **Testing methodology — read this before assuming anything is "confirmed working":**
 For most of this project's life there was **zero live click-through** —
@@ -54,6 +77,8 @@ from the owner's own manual testing — rather than from further code
 review turning them up.
 
 **Still true, and still worth knowing:**
+- **Backend tests:** 332 `pytest` tests as of Stage 7, all green with
+  `APP_ENV=test uv run pytest -W error` on Python 3.14.
 - **No component-level tests exist** — only `core/services/*.spec.ts`
   (HTTP contract tests via `HttpTestingController`) plus one guard spec.
   42 tests across 11 files as of Stage 5. No component specs, no e2e.
@@ -136,7 +161,7 @@ kept here rather than in a file about to go stale again:
   first, then frontend, when both are involved), one patch file per
   chunk verified against a clean clone before handing it over, applied
   and pushed one at a time rather than all at once. Stage 5 ran this way
-  end to end and it worked well — worth continuing for Stage 6.
+  end to end and it worked well — worth continuing; Stages 6 and 7 (backend) ran this way too.
 
 ---
 
@@ -148,8 +173,9 @@ bitza/
 ├── bitza_project_context.md         ← full backend design doc, API contract
 ├── bitza_context_restoration.md     ← this file
 ├── bitza_frontend_context.md        ← full frontend design doc — READ THIS for any frontend work
-├── bitza_open_issues.md             ← tracker: Stage 6 shipped, Stage 7 (documents) backend done
+├── bitza_open_issues.md             ← tracker: Stage 6 shipped, Stage 7 (documents) backend done, frontend next
 ├── backend/
+│   ├── README.md                    ← short overview + endpoint map; DEPLOYMENT.md has setup steps
 │   ├── AI_instructions.md
 │   ├── ARCHITECTURAL_OVERVIEW.md
 │   ├── DEPLOYMENT.md
@@ -175,7 +201,7 @@ bitza/
             │   └── confirm-dialog/   reusable destructive-action confirmation
             ├── shell/
             │   └── app-shell.ts      toolbar + responsive sidenav + skip link
-            └── features/
+            └── features/               (no documents UI yet — Stage 7 frontend)
                 ├── auth/login/
                 ├── projects/         list, detail, form dialog, add-member dialog
                 ├── bitzas/           browser (tree nav), form/retire/reassign/move dialogs,
@@ -212,8 +238,10 @@ backend endpoints exist, the frontend does not use them yet.
 
 - **Full backend domain model, every schema/endpoint shape, and the
   reasoning behind each design decision** → `bitza_project_context.md`
-- **Active task: Stage 7 — document (datasheet/SDS) attachments; backend done, frontend pending** →
-  `bitza_open_issues.md`
+- **Active task: Stage 7 frontend — document (datasheet/SDS) UI on the bitza
+  detail page; backend is done** → `bitza_open_issues.md` (scope,
+  constraints and the proposed approach) and the "Documents" section of
+  `bitza_project_context.md` (the API contract)
 - **Full frontend architecture: what's built, conventions, Signal Forms
   usage notes, known assumptions needing backend confirmation, testing
   state, and outstanding work** → `bitza_frontend_context.md`

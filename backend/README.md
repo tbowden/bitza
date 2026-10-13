@@ -1,10 +1,18 @@
-# Bitza asset management API
+# Bitza API
 
-A REST API for tracking the location, quantity, and details of physical assets —
-electronic components, tools, and other items stored across named locations.
+A REST API for tracking physical stuff — electronic components, tools and
+other items — with who is responsible for it, where it is, who has it, and
+(for consumables) how many are left. One unified data model (Projects and
+Bitzas) serves both a home workshop and a club with rotating membership.
 
 > **Getting started?** See [DEPLOYMENT.md](DEPLOYMENT.md) for step-by-step
-> setup instructions covering local development, Docker UAT, and production.
+> setup covering local development, Docker UAT, and production.
+>
+> **Design and API contract:** the full domain model, every endpoint shape and
+> the reasoning behind each decision live in
+> [`../bitza_project_context.md`](../bitza_project_context.md). This README is
+> only an overview; if the two ever disagree, that document (and the live
+> `/api/v1/docs`) wins.
 
 ---
 
@@ -31,117 +39,78 @@ app/
   api/v1/
     router.py
     endpoints/
-      auth.py                   # POST /auth/{login,refresh,logout}
-      users.py                  # CRUD /users/
-      locations.py              # CRUD /locations/ + nested details
-      assets.py                 # CRUD /assets/, transactions, audit, categories
-  services/
-    auth_service.py
-    user_service.py
-    location_service.py
-    asset_service.py
-  repositories/
-    user_repository.py
-    token_repository.py
-    location_repository.py
-    asset_repository.py
-    category_repository.py
-  models/
-    base.py                     # UTCDateTime TypeDecorator
-    user.py
-    token.py
-    location.py
-    asset.py
-  schemas/
-    auth.py
-    user.py
-    location.py
-    asset.py
-  db/
-    session.py
+      auth.py                   # /auth/{login,refresh,logout}
+      users.py                  # /users/ (+ /me, /directory)
+      projects.py               # /projects/ (+ /mine, members)
+      bitzas.py                 # /bitzas/ (tree, checkout, stock, images,
+                                #   documents), /categories/, /checkouts/mine
+      audit.py                  # /audit/
+  services/                     # auth_, user_, project_, bitza_service
+  repositories/                 # one per table (user, token, project, bitza,
+                                #   checkout, stock_log, bitza_image,
+                                #   bitza_document, category, audit, system_config)
+  models/                       # SQLAlchemy models (base.py has UTCDateTime)
+  schemas/                      # Pydantic request/response models
+  db/session.py
   core/
-    config.py
+    config.py                   # Settings (env-driven)
     security.py
     exceptions.py
     dependencies.py
+    file_types.py               # content sniffing for uploads
 
-alembic/
-  versions/
-    0001_initial.py             # users + refresh_tokens
-    0002_assets.py              # locations, assets, transactions, audit
+alembic/versions/
+  0001_initial.py               # users + refresh_tokens
+  0002_bitzas.py                # teams (later renamed projects), bitzas, checkouts, stock logs
+  0003_system_config.py         # singleton root-bitza pointer
+  0004_rename_team_to_project.py
+  0005_bitza_documents.py       # datasheets / SDS / manuals
+tests/
 ```
 
 ---
 
-## User roles and permissions
+## User roles
+
+Three roles: `superuser`, `admin`, `user`. Roles govern **account management
+only**; inside the Project/Bitza model everyone can do (nearly) everything by
+design, with one exception — hard-deleting a bitza is admin/superuser only.
 
 | Action | superuser | admin | user |
 |---|---|---|---|
 | Create superuser | CLI only | ✗ | ✗ |
 | Create admin | ✓ | ✗ | ✗ |
 | Create user | ✓ | ✓ | ✗ |
-| List / view any user | ✓ | ✓ | own only |
-| Update user details | ✓ | users only | ✗ |
-| Suspend a user | ✓ | users only | ✗ |
-| Change role | ✓ | ✗ | ✗ |
-| Delete user | ✓ | ✗ | ✗ |
+| Change a role | ✓ | ✗ | ✗ |
+| Suspend / delete a user | ✓ | plain users only | ✗ |
+| View the user list and audit log | ✓ | ✓ | ✗ |
 | Update own profile | ✓ | ✓ | ✓ |
-| Can be suspended | ✗ | ✓ | ✓ |
+| Hard-delete a bitza | ✓ | ✓ | ✗ |
 
 No self-registration — all accounts are created by admins or the superuser.
+The detailed rules (including nobody acting on their own account) are in
+`bitza_project_context.md`.
 
 ---
 
-## API endpoints
+## API at a glance
 
-### Auth
+All under `/api/v1`. Interactive docs when running:
+http://localhost:8000/api/v1/docs
 
-| Method | Path | Description |
-|---|---|---|
-| POST | `/api/v1/auth/login` | Login with email or username |
-| POST | `/api/v1/auth/refresh` | Refresh token rotation |
-| POST | `/api/v1/auth/logout` | Revoke refresh token |
-
-### Users
-
-| Method | Path | Auth | Description |
-|---|---|---|---|
-| GET | `/api/v1/users/me` | Any | Get own profile |
-| PATCH | `/api/v1/users/me` | Any | Update own display name / password |
-| GET | `/api/v1/users/` | Admin+ | List users |
-| POST | `/api/v1/users/` | Admin+ | Create user |
-| GET | `/api/v1/users/{id}` | Admin+ / own | Get user |
-| PATCH | `/api/v1/users/{id}` | Admin+ | Update user |
-| DELETE | `/api/v1/users/{id}` | Superuser | Delete user |
-
-### Locations
-
-| Method | Path | Description |
-|---|---|---|
-| GET/POST | `/api/v1/locations/` | List / create storage locations |
-| GET/PATCH/DELETE | `/api/v1/locations/{id}` | Manage a location |
-| GET/POST | `/api/v1/locations/{id}/details` | List / create sub-locations |
-| GET/PATCH/DELETE | `/api/v1/locations/{id}/details/{id}` | Manage a sub-location |
-
-### Assets
-
-| Method | Path | Description |
-|---|---|---|
-| GET/POST | `/api/v1/assets/` | List / create assets |
-| GET/PATCH/DELETE | `/api/v1/assets/{id}` | Manage an asset |
-| POST | `/api/v1/assets/{id}/image` | Upload / replace image |
-| GET/POST | `/api/v1/assets/{id}/transactions` | Stock history / add movement |
-| GET/POST | `/api/v1/categories/` | List / create categories |
-| PATCH/DELETE | `/api/v1/categories/{id}` | Manage a category |
-| GET | `/api/v1/audit/` | Audit log (admin+ only) |
-
-### System
-
-| Method | Path | Description |
-|---|---|---|
-| GET | `/health` | Health check (no auth) |
-
-Interactive docs (when running): http://localhost:8000/api/v1/docs
+| Area | Paths |
+|---|---|
+| Auth | `/auth/login`, `/auth/refresh`, `/auth/logout` |
+| Users | `/users/`, `/users/me`, `/users/directory`, `/users/{id}` |
+| Projects | `/projects/`, `/projects/mine`, `/projects/{id}`, `/projects/{id}/members[/{user_id}]` |
+| Bitzas | `/bitzas/`, `/bitzas/{id}`, `…/ancestors`, `…/retire`, `…/reactivate`, `…/reassign-project` |
+| Checkout | `/bitzas/{id}/checkout`, `…/checkin`, `…/checkouts`; `/checkouts/mine` |
+| Stock | `/bitzas/{id}/stock-adjustments` |
+| Images | `/bitzas/{id}/images[/{image_id}]` |
+| Documents | `/bitzas/{id}/documents[/{document_id}]` |
+| Categories | `/categories/`, `/categories/{id}` |
+| Audit | `/audit/` (admin+) |
+| System | `/health` (root, no auth) |
 
 ---
 
@@ -169,18 +138,21 @@ POST /api/v1/auth/login
 
 ---
 
-## Location privacy
+## File uploads
 
-Storage locations and sub-locations can be marked private. Privacy cascades
-downward — a private location makes everything inside it private regardless
-of the sub-location's own setting.
+Images and documents are stored on the server filesystem under `UPLOAD_DIR`
+(default `./data/uploads`); the database records only the relative path.
 
-| Who can see a private resource | |
-|---|---|
-| Superuser | Always |
-| Owner | Always |
-| Admin | Only if the resource is shared |
-| Other users | Never |
+- **Images:** JPEG, PNG, GIF or WebP, max 10 MB.
+- **Documents:** PDF, common images, ZIP, Word/Excel/PowerPoint
+  (OOXML), OpenDocument and plain text, max `MAX_DOCUMENT_BYTES` (default 50 MB).
+- **The file's type is determined from its content**, not from the client's
+  `Content-Type` or filename (`app/core/file_types.py`). Anything else is
+  rejected with `415`. The detected type is what gets stored and served.
+- If a reverse proxy sits in front of the API, its request-body limit must be
+  at least the largest upload (see [DEPLOYMENT.md](DEPLOYMENT.md)).
+- **Back up `UPLOAD_DIR` together with the database** — they live in the same
+  volume.
 
 ---
 
@@ -188,7 +160,7 @@ of the sub-location's own setting.
 
 ```bash
 uv sync --group dev
-APP_ENV=test uv run pytest
+APP_ENV=test uv run pytest -W error          # -W error: how the suite is verified
 APP_ENV=test uv run pytest --cov=app --cov-report=term-missing
 ```
 
@@ -202,6 +174,9 @@ uv run alembic upgrade head
 
 # Generate a migration after model changes
 uv run alembic revision --autogenerate -m "describe change"
+
+# Check the models and migrations agree (needs an up-to-date database)
+uv run alembic check
 
 # Roll back one migration
 uv run alembic downgrade -1

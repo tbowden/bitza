@@ -261,6 +261,11 @@ shared Docker network:
 
 ```nginx
 location /api/ {
+    # Must be at least MAX_DOCUMENT_BYTES (default 50 MB) plus a little
+    # multipart overhead, or datasheet and larger image uploads will fail with
+    # a 413 from nginx (its default limit is 1 MB).
+    client_max_body_size 55m;
+
     proxy_pass         http://bitza_app:8000;
     proxy_set_header   Host              $host;
     proxy_set_header   X-Real-IP         $remote_addr;
@@ -332,21 +337,24 @@ docker compose run --rm app alembic current
 
 ---
 
-## Database backup
+## Backup
 
-The SQLite database lives in the `bitza_data` Docker volume. Back it up by
-copying the file out of the volume:
+The `bitza_data` Docker volume holds **both** the SQLite database
+(`/app/data/prod.db`) and every uploaded image and document
+(`/app/data/uploads/`). A backup needs both, or restored records will point at
+files that are gone:
 
 ```bash
 # Find the volume mount path
 docker volume inspect bitza_data
 
-# Or copy directly via the container
-docker compose exec app cat /app/data/prod.db > backup-$(date +%Y%m%d).db
+# Or archive the whole data directory via the container
+docker compose exec app tar -C /app/data -cf - . > backup-$(date +%Y%m%d).tar
 ```
 
-For automated backups, schedule the above `cat` command with cron and copy
-the output to a safe location.
+For automated backups, schedule the above command with cron and copy the
+output to a safe location. (The database runs in WAL mode; stray `*.part`
+files in `uploads/` are interrupted uploads and can be ignored.)
 
 ---
 

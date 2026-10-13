@@ -119,20 +119,45 @@ on-disk extension follows the content, unsupported content is a **415**
 (previously a 422 based on the claimed type only), and image serving adds
 `nosniff` and maps any non-image extension (pre-existing files) to
 `application/octet-stream`. `tests/test_images.py` is new — the image
-endpoints had no backend tests before. 332 backend tests green (286 + 46). Also fixed: the image 413 path used a
-deprecated Starlette constant that errors under `-W error`.
+endpoints had no backend tests before. 332 backend tests green (286 + 46).
+Also fixed: the image 413 path used a deprecated Starlette constant that
+errors under `-W error`.
 
 **Still to do for Stage 7:**
-- **Frontend**: model, service, and a documents section on the bitza detail
-  page (upload, list, download via blob fetch — saved as a download, never
-  opened inline in the app — edit metadata, delete). Avoid
-  the visually-hidden-input pattern the image gallery uses for the new
-  upload control (axe has never been run on it).
+- **Frontend — the next piece of work.** A model, service and documents
+  section on the bitza detail page: upload, list, download, edit metadata,
+  delete. API contract and the exact response fields are in
+  `bitza_project_context.md` ("Documents") and `backend/app/schemas/bitza.py`
+  (`BitzaDocumentRead` etc.) — verify field names against that file, not prose
+  (see the field-drift lesson in `bitza_context_restoration.md`). Constraints
+  and the approach proposed when this was scoped (not yet confirmed by the
+  owner — raise them again at the start of the work):
+  - **Download as a save, never inline.** The endpoint is authenticated, so
+    fetch via `HttpClient` as a blob (as `ImageService` does) and trigger a
+    save with a temporary `<a download>`. Do not open the blob in a tab: a
+    blob URL runs in the app's origin and bypasses the backend's
+    `attachment`/`nosniff` headers. If inline PDF viewing is ever wanted,
+    re-wrap the blob with an explicit `application/pdf` type first.
+  - **Upload control:** a real Material button that calls `click()` on a
+    `hidden` file input (via a template reference variable), rather than the
+    visually-hidden-input-in-a-label pattern `ImageGallery` uses (its focus
+    handling and nested `role="button"` span are suspected axe failures —
+    never checked). Consider retrofitting `ImageGallery` the same way.
+  - **Accessibility check:** nothing has ever been run through axe. Run the
+    axe DevTools browser extension on the bitza detail page before and after
+    adding the section to get a baseline.
+  - Unsupported file types come back as **415** with a human-readable
+    `detail`; the UI should show that message rather than a generic "Upload
+    failed." (image uploads got the same 415 in the follow-up patch).
+  - Follows the project conventions: external templates/styles, Signal Forms
+    for the metadata form, no `standalone: true`, etc. (`frontend/bitza/.claude/CLAUDE.md`).
 - **DB↔filesystem sync tooling** for admins (orphaned files, missing files;
-  the stored `sha256` allows integrity checks).
+  the stored `sha256` allows integrity checks). It should ignore or clear
+  stray `*.part` files (interrupted uploads).
 - Known related gaps: image files are not removed when a bitza is hard
-  deleted; documents/images live in the same volume as the DB but the
-  documented backup copies only the `.db` file.
+  deleted. The deployment docs now say to back up `uploads/` with the
+  database (previously they copied only the `.db` file) and to raise nginx's
+  `client_max_body_size`; neither is automated or enforced.
 
 ---
 

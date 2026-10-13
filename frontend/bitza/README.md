@@ -4,11 +4,16 @@ This project was generated using [Angular CLI](https://github.com/angular/angula
 
 ## Development server
 
-To start a local development server, run:
+To start a local development server, run (from this directory, after
+`nvm use` and `npm ci`):
 
 ```bash
-ng serve
+npm start        # or: npx ng serve
 ```
+
+`ng` is installed locally as a dev dependency, not globally, so a bare `ng
+serve` (or `uv run ng serve`) will fail with "command not found" unless you
+have also installed the CLI globally.
 
 Once the server is running, open your browser and navigate to `http://localhost:4200/`. The application will automatically reload whenever you modify any of the source files.
 

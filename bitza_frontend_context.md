@@ -6,6 +6,12 @@ still owed. Read `bitza_context_restoration.md` first for orientation and
 `bitza_project_context.md` for the backend/API contract this all sits on
 top of. This document is frontend-only.
 
+**Not yet built:** the UI for bitza **documents** (datasheets/SDS, Stage 7).
+The backend endpoints exist and are tested; there is no `Document` model,
+service or component in the frontend. Scope, constraints and the proposed
+approach are in `bitza_open_issues.md` ("Stage 7"); the API contract is in
+`bitza_project_context.md` ("Documents").
+
 ---
 
 ## Stack and setup
@@ -204,7 +210,10 @@ Angular version bumps and something stops working.
    history, never a stored field, matching the backend design exactly),
    stock adjustments (in/out toggle → signed delta, live negative-result
    preview, 422 handling), image gallery (upload/set-cover/delete,
-   authenticated blob fetching as described above).
+   authenticated blob fetching as described above). Image uploads are now
+   content-sniffed by the backend: a non-image file is rejected with 415, but
+   this component shows only a generic "Upload failed." snackbar for any
+   error, so the reason is not surfaced to the user.
 5. **Admin & polish** — users admin (create/edit/suspend/delete, with the
    permission table's actual nuance enforced: role-change is
    superuser-only, suspend/delete works for superuser-on-anyone or
@@ -359,6 +368,9 @@ plus a few frontend-specific scope cuts made along the way:
 
 ## Environment notes
 
+- **Running it**: from `frontend/bitza`, `nvm use && npm ci && npm start`
+  (= `npx ng serve`). The CLI is a local dev dependency, not a global — a
+  bare `ng`, or `uv run ng serve`, fails with "command not found".
 - **Node**: `frontend/.nvmrc` pins `v24.16.0`, which comfortably clears
   Angular 22 CLI's floor. A sandboxed dev environment used during this
   build was stuck on an older patch version and needed a local,
